@@ -13,7 +13,7 @@
 
 #define AUTH_TOKEN 0x12345678   // Authentication token for rootkit control
 #define __DEBUG__ 1             // General debugging statements
-#define __DEBUG_HOOK__ 1        // Debugging of inline function hooking
+#define __DEBUG_HOOK__ 0        // Debugging of inline function hooking
 #define __DEBUG_KEY__ 1         // Debugging of user keypresses
 #define __DEBUG_RW__ 1          // Debugging of sys_read and sys_write hooks
 
