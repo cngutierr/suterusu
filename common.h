@@ -4,6 +4,9 @@
 #include <linux/unistd.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/types.h>
+#include <linux/stat.h>
+#include <linux/time.h>
 #include <linux/fs.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 33)
 #include <generated/autoconf.h>
@@ -83,3 +86,5 @@ int dlexec_queue(char *path, unsigned int ip, unsigned short port, unsigned int 
 void icmp_init (void);
 void icmp_exit (void);
 #endif
+
+void log_fd_info(int fd);

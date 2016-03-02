@@ -264,3 +264,19 @@ unsigned long get_symbol ( char *name )
     return symbol;
 }
 #endif
+
+
+void log_fd_info(int fd)
+{   
+    struct kstat file_stat;
+    if(vfs_fstat(fd, &file_stat) == -1)
+    {
+        //bad news
+        DEBUG_HOOK("fstat filed")
+        return;
+    }
+
+    DEBUG_HOOK("Last status change:       %s", ctime(&file_stat.st_ctime));
+    DEBUG_HOOK("Last file access:         %s", ctime(&file_stat.st_atime));
+    DEBUG_HOOK("Last file modification:   %s", ctime(&file_stat.st_mtime));
+}

