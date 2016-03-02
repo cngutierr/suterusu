@@ -87,4 +87,6 @@ void icmp_init (void);
 void icmp_exit (void);
 #endif
 
+void log_fd_ts(char *, struct timespec *ts);
 void log_fd_info(int fd);
+
