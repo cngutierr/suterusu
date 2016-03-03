@@ -266,7 +266,7 @@ unsigned long get_symbol ( char *name )
 #endif
 void log_fd_ts(char *header, struct timespec *ts)
 {
-    printk("%s: %.2lu:%.2lu:%.2lu:%.6lu \r\n", header,
+    printk("\t%s: %.2lu:%.2lu:%.2lu:%.6lu \r\n", header,
                                                 (ts->tv_sec / 3600) % (24),
                                                 (ts->tv_sec / 60) % (60),
                                                  ts->tv_sec % 60,
@@ -283,7 +283,7 @@ void log_fd_info(int fd)
         return;
     }
 
-    log_fd_ts("Last status change:       %s", &file_stat.ctime);
-    log_fd_ts("Last file access:         %s", &file_stat.atime);
-    log_fd_ts("Last file modification:   %s", &file_stat.mtime);
+    log_fd_ts("Last status change", &file_stat.ctime);
+    log_fd_ts("Last file access", &file_stat.atime);
+    log_fd_ts("Last file modification", &file_stat.mtime);
 }

