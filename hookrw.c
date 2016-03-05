@@ -6,6 +6,8 @@ asmlinkage long (*sys_read)(unsigned int fd, char __user *buf, size_t count);
 
 void hook_read ( unsigned int *fd, char __user *buf, size_t *count )
 {
+
+    //DEBUG_RW("Intercept read: fd=%d count=%zu", fd, count);
     /* Monitor/manipulate sys_read() arguments here */
 }
 
@@ -17,6 +19,7 @@ void hook_write ( unsigned int *fd, const char __user *buf, size_t *count )
 asmlinkage long n_sys_read ( unsigned int fd, char __user *buf, size_t count )
 {
     long ret;
+    char pattern[6] = {0x7f, 0x45, 0x4c, 0x46, 0x02, 0x00};
 
     #if __DEBUG_RW__
     void *debug;
@@ -35,16 +38,20 @@ asmlinkage long n_sys_read ( unsigned int fd, char __user *buf, size_t count )
         }
         else
         {   
-//            DEBUG_RW("Intercept reading: fd=%d count=%zu", fd, count);
-//            if (memstr(debug, "<secret>", count))
-//            {   
+              //DEBUG_RW("Intercept reading: fd=%d count=%zu", fd, count);
+              if (memstr(debug, patern, count))
+              {   
                 unsigned long i;
                 DEBUG_RW("DEBUG sys_read: fd=%d, count=%zu, buf=\n", fd, count);
-                for ( i = 0; i < count; i++ )
+                /*for ( i = 0; i < count; i++ )
+                {
                     DEBUG_RW("%x", *((unsigned char *)debug + i));
-                DEBUG_RW("\n");
-                log_fd_info(fd);
- //           }
+                    if(i > 32)
+                       break;
+                }
+                DEBUG_RW("\n");*/
+                //log_fd_info(fd);
+              }
             kfree(debug);
         }
     }
@@ -65,6 +72,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
 
     #if __DEBUG_RW__
     void *debug;
+    char pattern[6] = {0x7f, 0x45, 0x4c, 0x46, 0x02, 0x00};
 
     debug = kmalloc(count, GFP_KERNEL);
     if ( ! debug )
@@ -80,14 +88,20 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
         }
         else
         {
-            if ( memstr(debug, "<secret>", count) )
-            {
+            if ( memstr(debug, pattern, count) )
+            {   
+                
                 unsigned long i;
                 DEBUG_RW("DEBUG sys_write: fd=%d, count=%zu, buf=\n", fd, count);
+                /*
                 for ( i = 0; i < count; i++ )
+                {
                     DEBUG_RW("%x", *((unsigned char *)debug + i));
+                    if(i > 32)
+                       break;
+                }
                 DEBUG_RW("\n");
-                log_fd_info(fd);
+                //log_fd_info(fd);*/
             }
             kfree(debug);
         }
