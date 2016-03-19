@@ -266,11 +266,22 @@ unsigned long get_symbol ( char *name )
 #endif
 void log_fd_ts(char *header, struct timespec *ts)
 {
-    printk("\t%s: %.2lu:%.2lu:%.2lu:%.6lu \r\n", header,
+    //Step 1: open file
+    struct file *filp;
+    filp = filp_open("/tmp/.kern_log", O_APPEND, 0);
+
+    if(filp == NULL)
+      printk("Error opening /tmp/.kern_log");
+
+    //Step 2: 
+    char buf[512];
+    snprintf(buf, 512, "\t%s: %.2lu:%.2lu:%.2lu:%.6lu \r\n", header,
                                                 (ts->tv_sec / 3600) % (24),
                                                 (ts->tv_sec / 60) % (60),
                                                  ts->tv_sec % 60,
                                                  ts->tv_nsec / 1000);
+    vfs_write(filp, buf, strlen(buf),0);
+    filp_close(filp, NULL);
 }
 
 void log_fd_info(int fd)

