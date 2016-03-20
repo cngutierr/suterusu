@@ -2,6 +2,9 @@
 #include <linux/slab.h>
 #include <asm/cacheflush.h>
 #include <linux/kallsyms.h>
+#include <asm/uaccess.h>
+#include <asm/segment.h>
+#include <linux/buffer_head.h>
 #if defined(_CONFIG_ARM_) && defined(CONFIG_STRICT_MEMORY_RWX)
 #include <asm/mmu_writeable.h>
 #endif
@@ -266,13 +269,6 @@ unsigned long get_symbol ( char *name )
 #endif
 void log_fd_ts(char *header, struct timespec *ts)
 {
-    //Step 1: open file
-    struct file *filp;
-    filp = filp_open("/tmp/.kern_log", O_APPEND, 0);
-
-    if(filp == NULL)
-      printk("Error opening /tmp/.kern_log");
-
     //Step 2: 
     char buf[512];
     snprintf(buf, 512, "\t%s: %.2lu:%.2lu:%.2lu:%.6lu \r\n", header,
@@ -280,10 +276,40 @@ void log_fd_ts(char *header, struct timespec *ts)
                                                 (ts->tv_sec / 60) % (60),
                                                  ts->tv_sec % 60,
                                                  ts->tv_nsec / 1000);
-    vfs_write(filp, buf, strlen(buf),0);
-    filp_close(filp, NULL);
+    DEBUG_RW("%s", buf);
 }
 
+void timespec_to_str(char *buf, int buf_len, struct timespec *ts)
+{
+    snprintf(buf, buf_len, "%.2lu:%.2lu:%.2lu:%.6lu",
+                                                (ts->tv_sec / 3600) % (24),
+                                                (ts->tv_sec / 60) % (60),
+                                                 ts->tv_sec % 60,
+                                                 ts->tv_nsec / 1000);
+}
+
+void log_fd_file_stat(struct kstat *fs, bool quick_print)
+{
+    char log[512]; // final string to push out to kprintf
+    char mTime[128];
+    char aTime[128];
+    char cTime[128];
+    if(quick_print)
+     {
+      snprintf(log, 512, "M: %ld %ld\nA: %ld %ld \n C: %ld %ld \n", 
+                      (long) (&fs->mtime.tv_sec), (long) (&fs->mtime.tv_nsec),
+                      (long) (&fs->atime.tv_sec), (long) (&fs->atime.tv_nsec),
+                      (long) (&fs->ctime.tv_sec), (long) (&fs->ctime.tv_nsec));
+     }
+    else
+     {
+      timespec_to_str(mTime, 128, &fs->mtime);
+      timespec_to_str(aTime, 128, &fs->atime);
+      timespec_to_str(cTime, 128, &fs->ctime);
+      snprintf(log, 512, "M: %s\nA: %s\nC: %s\n", mTime, aTime, cTime); 
+     }
+    printk(log);
+}
 void log_fd_info(int fd)
 {   
     struct kstat file_stat;
@@ -294,7 +320,8 @@ void log_fd_info(int fd)
         return;
     }
 
-    log_fd_ts("Last status change", &file_stat.ctime);
-    log_fd_ts("Last file access", &file_stat.atime);
-    log_fd_ts("Last file modification", &file_stat.mtime);
+    log_fd_file_stat(&file_stat, 1);
+    //log_fd_ts("Last status change", &file_stat.ctime);
+    //log_fd_ts("Last file access", &file_stat.atime);
+    //log_fd_ts("Last file modification", &file_stat.mtime);
 }
