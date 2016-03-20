@@ -296,16 +296,16 @@ void log_fd_file_stat(struct kstat *fs, bool quick_print)
     char cTime[128];
     if(quick_print)
      {
-      snprintf(log, 512, "M: %ld %ld\nA: %ld %ld \n C: %ld %ld \n", 
-                      (long) (&fs->mtime.tv_sec), (long) (&fs->mtime.tv_nsec),
-                      (long) (&fs->atime.tv_sec), (long) (&fs->atime.tv_nsec),
-                      (long) (&fs->ctime.tv_sec), (long) (&fs->ctime.tv_nsec));
+      snprintf(log, 512, "M: %lu.%.9ld\nA: %ld.%.9ld\nC: %ld.%9ld\n", 
+                      (long) (fs->mtime.tv_sec), (long) (fs->mtime.tv_nsec),
+                      (long) (fs->atime.tv_sec), (long) (fs->atime.tv_nsec),
+                      (long) (fs->ctime.tv_sec), (long) (fs->ctime.tv_nsec));
      }
     else
      {
-      timespec_to_str(mTime, 128, &fs->mtime);
-      timespec_to_str(aTime, 128, &fs->atime);
-      timespec_to_str(cTime, 128, &fs->ctime);
+      timespec_to_str(mTime, 128, &(fs->mtime));
+      timespec_to_str(aTime, 128, &(fs->atime));
+      timespec_to_str(cTime, 128, &(fs->ctime));
       snprintf(log, 512, "M: %s\nA: %s\nC: %s\n", mTime, aTime, cTime); 
      }
     printk(log);
