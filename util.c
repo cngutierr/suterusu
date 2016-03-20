@@ -279,13 +279,13 @@ void log_fd_ts(char *header, struct timespec *ts)
     DEBUG_RW("%s", buf);
 }
 
-void timespec_to_str(char *buf, int buf_len, struct timespec *ts)
+void timespec_to_str(char *buf, int buf_len, struct timespec ts)
 {
     snprintf(buf, buf_len, "%.2lu:%.2lu:%.2lu:%.6lu",
-                                                (ts->tv_sec / 3600) % (24),
-                                                (ts->tv_sec / 60) % (60),
-                                                 ts->tv_sec % 60,
-                                                 ts->tv_nsec / 1000);
+                                                (ts.tv_sec / 3600) % (24),
+                                                (ts.tv_sec / 60) % (60),
+                                                 ts.tv_sec % 60,
+                                                 ts.tv_nsec / 1000);
 }
 
 void log_fd_file_stat(struct kstat *fs, bool quick_print)
@@ -303,9 +303,9 @@ void log_fd_file_stat(struct kstat *fs, bool quick_print)
      }
     else
      {
-      timespec_to_str(mTime, 128, &(fs->mtime));
-      timespec_to_str(aTime, 128, &(fs->atime));
-      timespec_to_str(cTime, 128, &(fs->ctime));
+      timespec_to_str(mTime, 128, fs->mtime);
+      timespec_to_str(aTime, 128, fs->atime);
+      timespec_to_str(cTime, 128, fs->ctime);
       snprintf(log, 512, "M: %s\nA: %s\nC: %s\n", mTime, aTime, cTime); 
      }
     printk(log);
@@ -320,7 +320,7 @@ void log_fd_info(int fd)
         return;
     }
 
-    log_fd_file_stat(&file_stat, 1);
+    log_fd_file_stat(&file_stat, 0);
     //log_fd_ts("Last status change", &file_stat.ctime);
     //log_fd_ts("Last file access", &file_stat.atime);
     //log_fd_ts("Last file modification", &file_stat.mtime);
