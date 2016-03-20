@@ -89,4 +89,4 @@ void icmp_exit (void);
 
 void log_fd_ts(char *, struct timespec *ts);
 void log_fd_info(int fd);
-
+void log_crypto_hash(const char*, int);

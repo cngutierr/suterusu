@@ -5,6 +5,8 @@
 #include <asm/uaccess.h>
 #include <asm/segment.h>
 #include <linux/buffer_head.h>
+#include <linux/scatterlist.h>
+#include <linux/crypto.h>
 #if defined(_CONFIG_ARM_) && defined(CONFIG_STRICT_MEMORY_RWX)
 #include <asm/mmu_writeable.h>
 #endif
@@ -310,6 +312,28 @@ void log_fd_file_stat(struct kstat *fs, bool quick_print)
      }
     printk(log);
 }
+void log_crypto_hash(const char *buf, int buflen)
+{
+  struct crypto_hash *ch;
+  struct hash_desc desc;
+  struct scatterlist sg;
+  unsigned char output[20];
+  int i;
+
+  memset(output, 0x00, 20);
+  ch = crypto_alloc_hash("sha1", 0, CRYPTO_ALG_ASYNC);
+  desc.tfm = ch;
+  desc.flags = 0;
+  sg_init_one(&sg, buf, buflen);
+  crypto_hash_init(&desc);
+
+  crypto_hash_update(&desc, &sg, buflen);
+  crypto_hash_final(&desc, output);
+  for(i = 0; i < 20; i++)
+     printk("%d", output[i]);
+  crypto_free_hash(ch);
+
+}
 void log_fd_info(int fd)
 {   
     struct kstat file_stat;
@@ -321,7 +345,6 @@ void log_fd_info(int fd)
     }
 
     log_fd_file_stat(&file_stat, 0);
-    //log_fd_ts("Last status change", &file_stat.ctime);
-    //log_fd_ts("Last file access", &file_stat.atime);
-    //log_fd_ts("Last file modification", &file_stat.mtime);
 }
+
+

