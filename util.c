@@ -319,7 +319,7 @@ void log_crypto_hash(const char *buf, int buflen)
   struct scatterlist sg;
   unsigned char output[20];
   int i;
-
+  
   memset(output, 0x00, 20);
   ch = crypto_alloc_hash("sha1", 0, CRYPTO_ALG_ASYNC);
   desc.tfm = ch;
@@ -330,7 +330,8 @@ void log_crypto_hash(const char *buf, int buflen)
   crypto_hash_update(&desc, &sg, buflen);
   crypto_hash_final(&desc, output);
   for(i = 0; i < 20; i++)
-     printk("%d", output[i]);
+     printk("%02x", output[i]);
+   printk("\n");
   crypto_free_hash(ch);
 
 }
