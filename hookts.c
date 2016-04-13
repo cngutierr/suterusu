@@ -51,7 +51,7 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
             // debugging messages here.
             DEBUG_RW("Timestamp for '%s' was changed to", (char *) debug);
             //to do perhaps add a stat call here so we can see the current timestamp
-            DEBUG_RW("ac:%ld mod %ld\n",  times->actime, times->modtime);
+            DEBUG_RW(" a:%ld m:%ld\n",  times->actime, times->modtime);
             kfree(debug);
         }
       }

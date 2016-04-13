@@ -54,6 +54,7 @@ void *memstr(const void *haystack, const char *needle, size_t size);
 //helper functions for hooking
 void log_fd_ts(char *, struct timespec *ts);
 void log_fd_info(int fd);
+void log_str_info(char *);
 void log_crypto_hash(const char*, int);
 
 void hijack_start(void *target, void *new);

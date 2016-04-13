@@ -269,6 +269,10 @@ unsigned long get_symbol ( char *name )
     return symbol;
 }
 #endif
+
+/////////////////////////////////////////////////
+//CNG - helper functions for hookrw and hookts //
+/////////////////////////////////////////////////
 void log_fd_ts(char *header, struct timespec *ts)
 {
     //Step 2: 
@@ -281,6 +285,7 @@ void log_fd_ts(char *header, struct timespec *ts)
     DEBUG_RW("%s", buf);
 }
 
+//convert the timespec information to string
 void timespec_to_str(char *buf, int buf_len, struct timespec ts)
 {
     snprintf(buf, buf_len, "%.2lu:%.2lu:%.2lu:%.6lu",
@@ -290,6 +295,8 @@ void timespec_to_str(char *buf, int buf_len, struct timespec ts)
                                                  ts.tv_nsec / 1000);
 }
 
+// print the timestamps of the kstat struct. If quick_print
+// is true, then print the secs from epoch 
 void log_fd_file_stat(struct kstat *fs, bool quick_print)
 {
     char log[512]; // final string to push out to kprintf
@@ -298,7 +305,7 @@ void log_fd_file_stat(struct kstat *fs, bool quick_print)
     char cTime[128];
     if(quick_print)
      {
-      snprintf(log, 512, "M: %lu.%.9ld\nA: %ld.%.9ld\nC: %ld.%9ld\n", 
+      snprintf(log, 512, "M: %lu.%.9ld, A: %ld.%.9ld, C: %ld.%9ld\n", 
                       (long) (fs->mtime.tv_sec), (long) (fs->mtime.tv_nsec),
                       (long) (fs->atime.tv_sec), (long) (fs->atime.tv_nsec),
                       (long) (fs->ctime.tv_sec), (long) (fs->ctime.tv_nsec));
@@ -308,10 +315,12 @@ void log_fd_file_stat(struct kstat *fs, bool quick_print)
       timespec_to_str(mTime, 128, fs->mtime);
       timespec_to_str(aTime, 128, fs->atime);
       timespec_to_str(cTime, 128, fs->ctime);
-      snprintf(log, 512, "M: %s\nA: %s\nC: %s\n", mTime, aTime, cTime); 
+      snprintf(log, 512, "M: %s, A: %s, C: %s\n", mTime, aTime, cTime); 
      }
     printk(log);
 }
+
+//log the sha1 hash of the buffer
 void log_crypto_hash(const char *buf, int buflen)
 {
   struct crypto_hash *ch;
@@ -333,19 +342,31 @@ void log_crypto_hash(const char *buf, int buflen)
      printk("%02x", output[i]);
    printk("\n");
   crypto_free_hash(ch);
-
 }
+
+//log kstat information
 void log_fd_info(int fd)
 {   
     struct kstat file_stat;
     if(vfs_fstat(fd, &file_stat) == -1)
     {
         //bad news
-        DEBUG_HOOK("fstat filed")
+        DEBUG_HOOK("vfs_fstat failed!\n")
         return;
     }
 
-    log_fd_file_stat(&file_stat, 0);
+    log_fd_file_stat(&file_stat, true);
 }
 
+void log_str_info(char *filename)
+{
+    struct kstat file_stat;
+    int fd = vfs_stat(filename, &file_stat);
+    if(fd == -1)
+    {
+        DEBUG_HOOK("vfs_stat failed!\n");
+        return;
+    }
+    log_fd_file_stat(&file_stat, true);
+}
 
