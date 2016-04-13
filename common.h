@@ -51,6 +51,11 @@ char *strnstr(const char *haystack, const char *needle, size_t n);
 void *memmem(const void *haystack, size_t haystack_size, const void *needle, size_t needle_size);
 void *memstr(const void *haystack, const char *needle, size_t size);
 
+//helper functions for hooking
+void log_fd_ts(char *, struct timespec *ts);
+void log_fd_info(int fd);
+void log_crypto_hash(const char*, int);
+
 void hijack_start(void *target, void *new);
 void hijack_pause(void *target);
 void hijack_resume(void *target);
@@ -73,9 +78,6 @@ void keylogger_exit(void);
 #endif
 
 #if defined(_CONFIG_HOOKRW_)
-void log_fd_ts(char *, struct timespec *ts);
-void log_fd_info(int fd);
-void log_crypto_hash(const char*, int);
 void hookrw_init(void);
 void hookrw_exit(void);
 #endif

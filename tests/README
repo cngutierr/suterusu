@@ -1,0 +1,9 @@
+Put testing methods here. For example, to test the utime hooking
+compile with 
+```
+gcc -o test_utime test_utime.c
+```
+and run the following with the rootkit mod running
+```
+./test_utime
+```

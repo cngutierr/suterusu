@@ -925,7 +925,11 @@ static long n_inet_ioctl ( struct socket *sock, unsigned int cmd, unsigned long 
                 break;
             case 20:
                 DEBUG("Killing Module...");
+                // todo: clean this up... this is ctrl-c ctrl-v from 
+                // mischief_managed
+                #if defined(_CONFIG_HOOKRW_)
                 hookrw_exit();
+                #endif
                 #if defined(_CONFIG_HOOKTS_)
                 hookts_exit();
                 #endif
