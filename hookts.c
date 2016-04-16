@@ -3,16 +3,26 @@
 #include <linux/limits.h>
 #include <linux/utime.h>
 #include <linux/kthread.h>
-#include <linux/wait.h>
-#include <linux/circ_buf.h>
+//#include <linux/wait.h>
+//#include <linux/circ_buf.h>
+#include <linux/mutex.h>
+#include <linux/kfifo.h>
 //logger stuff
-#define LOG_FILE_STR "/tmp/.decms_log"
-volatile unsigned long to_log = 0;
+
 DECLARE_WAIT_QUEUE_HEAD(log_event);
-#define BBB_SIZE 2048
+/*#define BBB_SIZE 2048
 char big_bad_buf[BBB_SIZE];
-struct circ_buf log_circ_buf;
+struct circ_buf log_circ_buf;*/
+#define LOG_FILE_STR "/tmp/.decms_log"
+#define FIFO_SIZE 512
+#define LOG_ENTRY_SIZE 512
+DEFINE_MUTEX(write_lock);
+struct kfifo_rec_ptr_2 fifo_buf;
+
+volatile unsigned long to_log = 0;
 struct task_struct *logger_ts;
+struct file *logfile;
+
 
 // pointer to the system call function
 asmlinkage long (*sys_utime)(char __user *filename, struct utimbuf __user *times);
@@ -23,6 +33,19 @@ asmlinkage long (*sys_utime)(char __user *filename, struct utimbuf __user *times
 void hook_utime(char __user *filename, struct utimbuf __user *times)
 {
     /* Monitor/manipulate utime arguments here */
+}
+ssize_t write_log(const char* entry, size_t entry_size)
+{
+    int ret;
+    DEBUG("Start write_log\n");
+    if(mutex_lock_interruptible(&write_lock))
+      return -1; //fail
+    DEBUG("Pushing into write_log %s\n", entry);
+    ret = kfifo_in(&fifo_buf, entry, entry_size);
+    mutex_unlock(&write_lock);
+    to_log += 1;
+    wake_up_interruptible(&log_event);
+    return ret;
 }
 
 asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times)
@@ -63,8 +86,9 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
             DEBUG_RW("Timestamp for '%s' was changed to", (char *) debug);
             //to do perhaps add a stat call here so we can see the current timestamp
             DEBUG_RW(" a:%ld m:%ld\n",  times->actime, times->modtime);
-            to_log = 1;
-            wake_up_interruptible(&log_event);
+            
+            write_log( (const char *) debug, length);
+
             kfree(debug);
         }
       }
@@ -82,22 +106,43 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
     return ret;
 }
 
-int consumer(void *data)
+
+
+
+int logger_thread(void *data)
 {
-    unsigned long head, tail;
+    char log_entry[LOG_ENTRY_SIZE];
+    int ret, len;
+    loff_t pos = 0;
+    mm_segment_t old_fs;
     
     while(1)
     {
-        wait_event_interruptible(log_event, (to_log == 1));
+        
+        wait_event_interruptible(log_event, (to_log > 0));
         DEBUG("Inside logger thread\n");
+        /*
         head = smp_load_acquire(&log_circ_buf.head);
         tail = log_circ_buf.tail;
         
         DEBUG("Consumming data...\n");
-        //struct item *item = &log_circ_buf.buf[tail];
-        //smp_store_release(&log_circ_buf.tail,(tail + 1) & (BBB_SIZE - 1));
-        
-        to_log = 0;
+        item = &log_circ_buf.buf[tail];
+        smp_store_release(&log_circ_buf.tail,(tail + 1) & (BBB_SIZE - 1));
+        */
+
+        len = kfifo_out(&fifo_buf, log_entry, LOG_ENTRY_SIZE);
+        log_entry[len] = '\0';
+        if(logfile)
+        {
+            old_fs = get_fs();
+            set_fs(get_ds());
+            ret = vfs_write(logfile, log_entry, len, &pos);
+            set_fs(old_fs);
+            DEBUG("WROTE A LOG ENTRY: %i %s\n", len, log_entry);
+        }
+
+
+        to_log -= 1;
         if(kthread_should_stop() == true)
         {
            DEBUG("Stopping DecMS logger...\n");
@@ -110,10 +155,22 @@ int consumer(void *data)
 
 void hookts_init ( void )
 {
+    int ret;
     DEBUG("Hooking sys_utime\n");
-    
-    log_circ_buf.buf = big_bad_buf;
-    logger_ts = kthread_run(consumer, NULL, "decms_logger");   
+    logfile = filp_open(LOG_FILE_STR, O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
+    if(!logfile)
+    {
+        DEBUG("Failed to open logfile '%s'\n", LOG_FILE_STR);
+    }
+    //log_circ_buf.buf = big_bad_buf;
+    // init the fifo buf
+    ret = kfifo_alloc(&fifo_buf, FIFO_SIZE, GFP_KERNEL);
+    if(ret)
+    {
+        DEBUG("Error allocating fifo log buff");
+    }
+
+    logger_ts = kthread_run(logger_thread, NULL, "decms_logger");   
     
     // grab the function pointer from the sys_call_table
     // and start intercepting calls
@@ -128,13 +185,15 @@ void hookts_exit ( void )
     // undo the hooking 
     hijack_stop(sys_utime);
     
-    DEBUG("Done with hijack_stop\n");
+    //close the log file
+    if(logfile)
+       filp_close(logfile, NULL);
     
-    // stop the consumer thread
+    // stop the logger thread
     to_log = 1;
     kthread_stop(logger_ts);
-    // flush the contents, if any
-    //to_log = 1;
-    //wake_up_interruptible(&log_event);
+    
+    //remove fifo
+    kfifo_free(&fifo_buf);
 
 }
