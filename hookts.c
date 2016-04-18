@@ -170,7 +170,7 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
 
     long ret;
     #if __DEBUG_TS__
-    DEBUG_RW("Futimesat detected\n");
+    DEBUG_RW("utimesat detected\n");
     #endif
     // do the heavy lefting here
     //hook_utime(filename, times);
