@@ -24,8 +24,10 @@ struct task_struct *logger_ts;
 struct file *logfile;
 
 
-// pointer to the system call function
+// pointer to the system call functions
 asmlinkage long (*sys_utime)(char __user *filename, struct utimbuf __user *times);
+asmlinkage long (*sys_futimesat)(int dfd, char __user *filename, struct timeval __user *utimes);
+asmlinkage long (*sys_utimensat)(int dfd, char __user *filename, struct timespec __user *utimes, int flags);
 
 // Do the heavy lifting in hook_utime... should be called in the n_sys_utime function 
 // hook_utime should quickly identify that the timestamp is different than the current
@@ -105,6 +107,81 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
 
     return ret;
 }
+asmlinkage long n_sys_futimesat (int dfd, char __user *filename, struct timeval __user *utimes)
+{
+
+    long ret;
+
+    #if __DEBUG_TS__
+    void *debug;
+    int length = 0;
+    DEBUG_RW("Futimesat detected\n");
+    //get the length of the filename from userspace
+    length = strnlen_user(filename, NAME_MAX);
+    if(length <= 0)
+    {
+       DEBUG_RW("Error: Failed to get the length of the file string\n");
+    }
+    else
+    {
+      // allocate some memory to copy the filename into kernel space
+      debug = kmalloc(length, GFP_KERNEL);
+      // failed to kmalloc, print some error message to dmesg
+      if ( ! debug )
+      {
+        DEBUG_RW("ERROR: Failed to allocate %i bytes for sys_futimesat debugging\n", length);
+      }
+      else
+      {
+        // copy the filename for user space into kernel space
+        if ( strncpy_from_user(debug, filename, length + 1) == 0)
+        {
+            DEBUG_RW("ERROR: Failed to copy %i bytes from user for sys_futimesat debugging\n", length);
+            kfree(debug);
+        }
+        else
+        {  
+            // print out the file that was accessed or other 
+            // debugging messages here.
+            DEBUG_RW("Timestamp for '%s' was changed to", (char *) debug);
+            //to do perhaps add a stat call here so we can see the current timestamp
+            DEBUG_RW(" a:%ld m:%ld\n",  utimes[0].tv_sec, utimes[1].tv_sec);
+            
+            write_log( (const char *) debug, length);
+
+            kfree(debug);
+        }
+      }
+    }
+    #endif
+    // do the heavy lefting here
+    //hook_utime(filename, times);
+
+    // let the real sys_utime function run here
+    hijack_pause(sys_futimesat);
+    ret = sys_futimesat(dfd, filename, utimes);
+    hijack_resume(sys_futimesat);
+
+    return ret;
+}
+
+asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec __user *utimes, int flags)
+{
+
+    long ret;
+    #if __DEBUG_TS__
+    DEBUG_RW("Futimesat detected\n");
+    #endif
+    // do the heavy lefting here
+    //hook_utime(filename, times);
+
+    // let the real sys_utime function run here
+    hijack_pause(sys_utimensat);
+    ret = sys_utimensat(dfd, filename, utimes, flags);
+    hijack_resume(sys_utimensat);
+
+    return ret;
+}
 
 
 
@@ -175,7 +252,11 @@ void hookts_init ( void )
     // grab the function pointer from the sys_call_table
     // and start intercepting calls
     sys_utime = (void *)sys_call_table[__NR_utime];
+    sys_utimensat = (void *)sys_call_table[__NR_utimensat];
+    sys_futimesat = (void *)sys_call_table[__NR_futimesat];
     hijack_start(sys_utime, &n_sys_utime);
+    hijack_start(sys_utimensat, &n_sys_utimensat);
+    hijack_start(sys_futimesat, &n_sys_futimesat);
 }
 
 void hookts_exit ( void )
@@ -184,6 +265,8 @@ void hookts_exit ( void )
     
     // undo the hooking 
     hijack_stop(sys_utime);
+    hijack_stop(sys_utimensat);
+    hijack_stop(sys_futimesat);
     
     //close the log file
     if(logfile)

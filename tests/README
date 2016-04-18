@@ -7,3 +7,7 @@ and run the following with the rootkit mod running
 ```
 ./test_utime
 ```
+Futimesat can be tested with the following command:
+```
+touch -t 201209141013 test_utime
+```
