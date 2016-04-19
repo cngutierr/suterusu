@@ -206,6 +206,7 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
             write_log( (const char *) buf, 256);
         }
         kfree(buf);
+        kfree(argument);
     }
     else
     {
