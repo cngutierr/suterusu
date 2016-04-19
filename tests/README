@@ -7,7 +7,18 @@ and run the following with the rootkit mod running
 ```
 ./test_utime
 ```
-Futimesat can be tested with the following command:
+
+utimensat can be tested with the following command:
 ```
 touch -t 201209141013 test_utime
 ```
+futimesat is tested with
+```
+gcc -o test_futimesat test_futimesat.c
+```
+and run the following with the rootkit mod running
+
+```
+./test_futimesat
+```
+
