@@ -21,6 +21,7 @@ struct circ_buf log_circ_buf;*/
 #define UTIME_CALL 1
 #define FUTIMESAT_CALL 2
 #define UTIMENSAT_CALL 3
+#define ALLOWED_TIME_DIFFERENCE 3
 DEFINE_MUTEX(write_lock);
 struct kfifo_rec_ptr_2 fifo_buf;
 
@@ -37,6 +38,7 @@ asmlinkage long (*sys_utimensat)(int dfd, char __user *filename, struct timespec
 //pointers to system calls used by this program
 asmlinkage long (*sys_readlink)(const char __user *path, char __user *buf, int bufsiz);
 asmlinkage long (*sys_getcwd)(char __user *buf, unsigned long size);
+asmlinkage long (*sys_clock_gettime)(clockid_t which_time, struct timespec __user *tp);
 
 void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf __user *times, struct timeval __user *vutimes, struct timespec __user *utimes, int flags);
 
@@ -106,20 +108,60 @@ void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf 
     void *argument;
     void *callname;
     mm_segment_t oldfs;
+    struct timespec *mytime;
+    mytime = kzalloc(sizeof(struct timespec), GFP_KERNEL);
+    oldfs = get_fs();
+    set_fs(KERNEL_DS);
+    err = sys_clock_gettime(CLOCK_REALTIME, mytime);
+    if(err < 0)
+        {DEBUG_RW("Error using clock_gettime: %i\n", err);}
+    set_fs(oldfs);
     callname = kzalloc(10, GFP_KERNEL);
-    if(times != NULL){
+    //DEBUG_RW(" current time:%ld\n", vutimes[0].tv_sec);
+    if(times != NULL)
+    {
+        if(times->actime - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - times->actime <= ALLOWED_TIME_DIFFERENCE
+          && times->modtime - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - times->modtime <= ALLOWED_TIME_DIFFERENCE)
+        {
+            //No suspicious timechange has occured. Return early to save cycles.
+            kfree(callname);
+            kfree(mytime);
+            return;
+        }
         interceptedcall = UTIME_CALL;
         snprintf((char *) callname , 10, "utime");
     }
-    else if(vutimes != NULL){
+    else if(vutimes != NULL)
+    {
+        if(vutimes[0].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - vutimes[0].tv_sec <= ALLOWED_TIME_DIFFERENCE
+           && vutimes[1].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - vutimes[1].tv_sec <= ALLOWED_TIME_DIFFERENCE)
+        {
+            kfree(callname);
+            kfree(mytime);
+            return;
+        }
         interceptedcall = FUTIMESAT_CALL;
         snprintf((char *) callname , 10, "futimesat");
     }
-    else{
+    else if (utimes != NULL)
+    {
+        if(utimes[0].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - utimes[0].tv_sec <= ALLOWED_TIME_DIFFERENCE
+           && utimes[1].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - utimes[1].tv_sec <= ALLOWED_TIME_DIFFERENCE)
+        {
+            kfree(callname);
+            kfree(mytime);
+            return;
+        }
         interceptedcall = UTIMENSAT_CALL;
         snprintf((char *) callname , 10, "utimensat");
     }
-    oldfs = get_fs();
+    else
+    {
+        //System call made with null timestamp parameters. Suspect file will automatically be set to current system time. Nothing to do here
+        kfree(callname);
+        kfree(mytime);
+        return;
+    }
     fullpath = kzalloc(DEFAULT_FILEPATH_SIZE, GFP_KERNEL);
     if(filename == NULL)
     {
@@ -142,8 +184,7 @@ void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf 
             set_fs(oldfs);
             snprintf((char *) fullpath, DEFAULT_FILEPATH_SIZE, "%s%s", (char *) fullpath, filename);
     }
-    //to do perhaps add a stat call here so we can see the current timestamp
-    //write_log( (const char *) buf, 256);
+    write_log( (const char *) fullpath, 256);
     DEBUG_RW("%s used to set Timestamp for '%s' to", (char *) callname, (char *) fullpath);
     if(interceptedcall == UTIME_CALL)
         {DEBUG_RW(" a:%ld m:%ld\n",  times->actime, times->modtime);}
@@ -230,6 +271,7 @@ void hookts_init ( void )
     //grab function pointers for other system calls needed by program
     sys_readlink = (void *)sys_call_table[__NR_readlink];
     sys_getcwd = (void *)sys_call_table[__NR_getcwd];
+    sys_clock_gettime = (void *)sys_call_table[__NR_clock_gettime];
 }
 
 void hookts_exit ( void )
