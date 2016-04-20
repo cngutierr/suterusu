@@ -17,6 +17,10 @@ struct circ_buf log_circ_buf;*/
 #define LOG_FILE_STR "/tmp/.decms_log"
 #define FIFO_SIZE 512
 #define LOG_ENTRY_SIZE 512
+#define DEFAULT_FILEPATH_SIZE 256
+#define UTIME_CALL 1
+#define FUTIMESAT_CALL 2
+#define UTIMENSAT_CALL 3
 DEFINE_MUTEX(write_lock);
 struct kfifo_rec_ptr_2 fifo_buf;
 
@@ -25,19 +29,17 @@ struct task_struct *logger_ts;
 struct file *logfile;
 
 
-// pointer to the system call functions
-asmlinkage long (*sys_readlink)(const char __user *path, char __user *buf, int bufsiz);
+// pointers to the system call functions being hijacked
 asmlinkage long (*sys_utime)(char __user *filename, struct utimbuf __user *times);
 asmlinkage long (*sys_futimesat)(int dfd, char __user *filename, struct timeval __user *utimes);
 asmlinkage long (*sys_utimensat)(int dfd, char __user *filename, struct timespec __user *utimes, int flags);
 
-// Do the heavy lifting in hook_utime... should be called in the n_sys_utime function 
-// hook_utime should quickly identify that the timestamp is different than the current
-// time and we should log the incident
-void hook_utime(char __user *filename, struct utimbuf __user *times)
-{
-    /* Monitor/manipulate utime arguments here */
-}
+//pointers to system calls used by this program
+asmlinkage long (*sys_readlink)(const char __user *path, char __user *buf, int bufsiz);
+asmlinkage long (*sys_getcwd)(char __user *buf, unsigned long size);
+
+void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf __user *times, struct timeval __user *vutimes, struct timespec __user *utimes, int flags);
+
 ssize_t write_log(const char* entry, size_t entry_size)
 {
     int ret;
@@ -56,51 +58,8 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
 {
 
     long ret;
-
-    #if __DEBUG_TS__  
-    void *debug;
-    int length = 0;
-    //get the length of the filename from userspace
-    length = strnlen_user(filename, NAME_MAX);
-    if(length <= 0)
-    {
-       DEBUG_RW("Error: Failed to get the length of the file string\n");
-    }
-    else
-    {
-      // allocate some memory to copy the filename into kernel space
-      debug = kmalloc(length, GFP_KERNEL);
-      // failed to kmalloc, print some error message to dmesg
-      if ( ! debug )
-      {
-        DEBUG_RW("ERROR: Failed to allocate %i bytes for sys_utime debugging\n", length);
-      }
-      else
-      {
-        // copy the filename for user space into kernel space
-        if ( strncpy_from_user(debug, filename, length + 1) == 0)
-        {
-            DEBUG_RW("ERROR: Failed to copy %i bytes from user for sys_utime debugging\n", length);
-            kfree(debug);
-        }
-        else
-        {  
-            // print out the file that was accessed or other 
-            // debugging messages here.
-            DEBUG_RW("Timestamp for '%s' was changed to", (char *) debug);
-            //to do perhaps add a stat call here so we can see the current timestamp
-            DEBUG_RW(" a:%ld m:%ld\n",  times->actime, times->modtime);
-            
-            write_log( (const char *) debug, length);
-
-            kfree(debug);
-        }
-      }
-    }
-    #endif
-
     // do the heavy lefting here
-    hook_utime(filename, times);
+    general_timestamp_processor(0, filename, times, NULL, NULL, 0);
 
     // let the real sys_utime function run here
     hijack_pause(sys_utime);
@@ -113,51 +72,8 @@ asmlinkage long n_sys_futimesat (int dfd, char __user *filename, struct timeval 
 {
 
     long ret;
-
-    #if __DEBUG_TS__
-    void *debug;
-    int length = 0;
-    DEBUG_RW("Futimesat detected\n");
-    //get the length of the filename from userspace
-    length = strnlen_user(filename, NAME_MAX);
-    if(length <= 0)
-    {
-       DEBUG_RW("Error: Failed to get the length of the file string\n");
-    }
-    else
-    {
-      // allocate some memory to copy the filename into kernel space
-      debug = kmalloc(length, GFP_KERNEL);
-      // failed to kmalloc, print some error message to dmesg
-      if ( ! debug )
-      {
-        DEBUG_RW("ERROR: Failed to allocate %i bytes for sys_futimesat debugging\n", length);
-      }
-      else
-      {
-        // copy the filename for user space into kernel space
-        if ( strncpy_from_user(debug, filename, length + 1) == 0)
-        {
-            DEBUG_RW("ERROR: Failed to copy %i bytes from user for sys_futimesat debugging\n", length);
-            kfree(debug);
-        }
-        else
-        {  
-            // print out the file that was accessed or other 
-            // debugging messages here.
-            DEBUG_RW("Timestamp for '%s' was changed to", (char *) debug);
-            //to do perhaps add a stat call here so we can see the current timestamp
-            DEBUG_RW(" a:%ld m:%ld\n",  utimes[0].tv_sec, utimes[1].tv_sec);
-            
-            write_log( (const char *) debug, length);
-
-            kfree(debug);
-        }
-      }
-    }
-    #endif
     // do the heavy lefting here
-    //hook_utime(filename, times);
+    general_timestamp_processor(dfd, filename, NULL, utimes, NULL, 0);
 
     // let the real sys_utime function run here
     hijack_pause(sys_futimesat);
@@ -171,86 +87,8 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
 {
 
     long ret;
-    #if __DEBUG_TS__
-    void *debug;
-    void *buf;
-    void *argument;
-    mm_segment_t oldfs;
-    int length = 0;
-    int err = 0;
-    DEBUG_RW("Utimensat detected\n");
-    //If the filename is null, we must be using a file descriptor
-    if(filename == NULL)
-    {
-        //readlink won't null terminate strings by default. kzalloc sets the whole thing to 0's
-        buf = kzalloc(256, GFP_KERNEL);
-        argument = kzalloc(32, GFP_KERNEL);
-        oldfs = get_fs();
-        //Temporarily allow the usage of kernel memory addresses in system calls
-        set_fs(KERNEL_DS);
-	sys_readlink = (void *)sys_call_table[__NR_readlink];
-        snprintf((char *) argument, 32, "/proc/self/fd/%i", dfd);
-        //The length is one less byte to ensure the string is null terminated
-        err = sys_readlink((char *) argument, (char *) buf, 255);
-        set_fs(oldfs);
-        if(err < 0)
-        {
-            DEBUG_RW("Readlink error: %i\n", err);
-        }
-        else
-        {
-            DEBUG_RW("Timestamp for '%s' was changed to", (char *) buf);
-            //to do perhaps add a stat call here so we can see the current timestamp
-            DEBUG_RW(" a:%ld m:%ld\n",  utimes[0].tv_sec, utimes[1].tv_sec);
-            
-            write_log( (const char *) buf, 256);
-        }
-        kfree(buf);
-        kfree(argument);
-    }
-    else
-    {
-        //get the length of the filename from userspace
-        length = strnlen_user(filename, NAME_MAX);
-        if(length <= 0)
-        {
-           DEBUG_RW("Error: Failed to get the length of the file string\n");
-        }
-        else
-        {
-          // allocate some memory to copy the filename into kernel space
-          debug = kmalloc(length, GFP_KERNEL);
-          // failed to kmalloc, print some error message to dmesg
-          if ( ! debug )
-          {
-            DEBUG_RW("ERROR: Failed to allocate %i bytes for sys_utimensat debugging\n", length);
-          }
-          else
-          {
-            // copy the filename for user space into kernel space
-            if ( strncpy_from_user(debug, filename, length + 1) == 0)
-            {
-                DEBUG_RW("ERROR: Failed to copy %i bytes from user for sys_utimensat debugging\n", length);
-                kfree(debug);
-            }
-            else
-            {  
-                // print out the file that was accessed or other 
-                // debugging messages here.
-                DEBUG_RW("Timestamp for '%s' was changed to", (char *) debug);
-                //to do perhaps add a stat call here so we can see the current timestamp
-                DEBUG_RW(" a:%ld m:%ld\n",  utimes[0].tv_sec, utimes[1].tv_sec);
-            
-                write_log( (const char *) debug, length);
-
-                kfree(debug);
-            }
-          }
-        }
-    }
-    #endif
     // do the heavy lefting here
-    //hook_utime(filename, times);
+    general_timestamp_processor(dfd, filename, NULL, NULL, utimes, flags);
 
     // let the real sys_utime function run here
     hijack_pause(sys_utimensat);
@@ -260,8 +98,62 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
     return ret;
 }
 
-
-
+void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf __user *times, struct timeval __user *vutimes, struct timespec __user *utimes, int flags)
+{
+    int interceptedcall;
+    int err;
+    void *fullpath;
+    void *argument;
+    void *callname;
+    mm_segment_t oldfs;
+    callname = kzalloc(10, GFP_KERNEL);
+    if(times != NULL){
+        interceptedcall = UTIME_CALL;
+        snprintf((char *) callname , 10, "utime");
+    }
+    else if(vutimes != NULL){
+        interceptedcall = FUTIMESAT_CALL;
+        snprintf((char *) callname , 10, "futimesat");
+    }
+    else{
+        interceptedcall = UTIMENSAT_CALL;
+        snprintf((char *) callname , 10, "utimensat");
+    }
+    oldfs = get_fs();
+    fullpath = kzalloc(DEFAULT_FILEPATH_SIZE, GFP_KERNEL);
+    if(filename == NULL)
+    {
+        //readlink won't null terminate strings by default. kzalloc sets the whole thing to 0's
+        argument = kzalloc(32, GFP_KERNEL);
+        //Temporarily allow the usage of kernel memory addresses in system calls
+        set_fs(KERNEL_DS);
+        snprintf((char *) argument, 32, "/proc/self/fd/%i", dfd);
+        //The length is one less byte to ensure the string is null terminated
+        err = sys_readlink((char *) argument, (char *) fullpath, DEFAULT_FILEPATH_SIZE - 1);
+        kfree(argument);
+        set_fs(oldfs);
+        if(err < 0)
+            {DEBUG_RW("Error using readlink: %i\n", err);}
+    }
+    else
+    {
+            set_fs(KERNEL_DS);
+            sys_getcwd( (char *) fullpath, DEFAULT_FILEPATH_SIZE);
+            set_fs(oldfs);
+            snprintf((char *) fullpath, DEFAULT_FILEPATH_SIZE, "%s%s", (char *) fullpath, filename);
+    }
+    //to do perhaps add a stat call here so we can see the current timestamp
+    //write_log( (const char *) buf, 256);
+    DEBUG_RW("%s used to set Timestamp for '%s' to", (char *) callname, (char *) fullpath);
+    if(interceptedcall == UTIME_CALL)
+        {DEBUG_RW(" a:%ld m:%ld\n",  times->actime, times->modtime);}
+    else if(interceptedcall == FUTIMESAT_CALL)
+        {DEBUG_RW(" a:%ld m:%ld\n",  vutimes[0].tv_sec, vutimes[1].tv_sec);}
+    else
+        {DEBUG_RW(" a:%ld m:%ld\n",  utimes[0].tv_sec, utimes[1].tv_sec);}
+    kfree(callname);
+    kfree(fullpath);
+}
 
 int logger_thread(void *data)
 {
@@ -334,6 +226,10 @@ void hookts_init ( void )
     hijack_start(sys_utime, &n_sys_utime);
     hijack_start(sys_utimensat, &n_sys_utimensat);
     hijack_start(sys_futimesat, &n_sys_futimesat);
+
+    //grab function pointers for other system calls needed by program
+    sys_readlink = (void *)sys_call_table[__NR_readlink];
+    sys_getcwd = (void *)sys_call_table[__NR_getcwd];
 }
 
 void hookts_exit ( void )
