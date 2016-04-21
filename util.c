@@ -369,4 +369,3 @@ void log_str_info(char *filename)
     }
     log_fd_file_stat(&file_stat, true);
 }
-

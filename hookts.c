@@ -1,10 +1,10 @@
 #include "common.h"
 #include <asm/uaccess.h>
 #include <linux/limits.h>
+#include <linux/ktime.h>
 #include <linux/utime.h>
 #include <linux/kthread.h>
 //#include <linux/wait.h>
-//#include <linux/circ_buf.h>
 #include <linux/mutex.h>
 #include <linux/kfifo.h>
 //Needed to use readlink
@@ -39,21 +39,39 @@ asmlinkage long (*sys_utimensat)(int dfd, char __user *filename, struct timespec
 //pointers to system calls used by this program
 asmlinkage long (*sys_readlink)(const char __user *path, char __user *buf, int bufsiz);
 asmlinkage long (*sys_getcwd)(char __user *buf, unsigned long size);
-asmlinkage long (*sys_clock_gettime)(clockid_t which_time, struct timespec __user *tp);
 
-void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf __user *times, struct timeval __user *vutimes, struct timespec __user *utimes, int flags);
+void general_timestamp_processor(int dfd, char __user *filename, 
+                                 struct utimbuf __user *times, 
+                                 struct timeval __user *vutimes, 
+                                 struct timespec __user *utimes, 
+                                 int flags);
 
 ssize_t write_log(const char* entry, size_t entry_size)
 {
-    int ret;
-    DEBUG("Start write_log\n");
+    int ret, final_entry_size;
+    char *final_entry;
+    struct timespec *cur_time;
+    char timestamp[22]; //stores the timestamp as a epoch string
+       
     if(mutex_lock_interruptible(&write_lock))
       return -1; //fail
-    DEBUG("Pushing into write_log %s\n", entry);
-    ret = kfifo_in(&fifo_buf, entry, entry_size);
+    
+    cur_time = kzalloc(sizeof(struct timespec), GFP_KERNEL);
+    //get_cur_ts(cur_time);
+    ktime_get_real_ts(cur_time);
+    snprintf(timestamp, 22, "%lu.%lu", cur_time->tv_sec, cur_time->tv_nsec);
+    
+    final_entry_size = sizeof(timestamp) + entry_size + 2;
+    final_entry = kzalloc(final_entry_size, GFP_KERNEL);
+    snprintf(final_entry, final_entry_size, "%s\t%s\n", timestamp, entry);
+
+    ret = kfifo_in(&fifo_buf, final_entry, final_entry_size);
     mutex_unlock(&write_lock);
     to_log += 1;
     wake_up_interruptible(&log_event);
+    kfree(cur_time);
+    kfree(final_entry);
+ 
     return ret;
 }
 
@@ -113,28 +131,32 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
     return ret;
 }
 
-void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf __user *times, struct timeval __user *vutimes, struct timespec __user *utimes, int flags)
+
+void general_timestamp_processor(int dfd,                       //add description of inputs here
+                                 char __user *filename, 
+                                 struct utimbuf __user *times, 
+                                 struct timeval __user *vutimes, 
+                                 struct timespec __user *utimes, 
+                                 int flags)
 {
     int interceptedcall;
     int err;
     void *fullpath;
     void *argument;
     void *callname;
-    mm_segment_t oldfs;
     struct timespec *mytime;
+    mm_segment_t oldfs;
+    
     mytime = kzalloc(sizeof(struct timespec), GFP_KERNEL);
-    oldfs = get_fs();
-    set_fs(KERNEL_DS);
-    err = sys_clock_gettime(CLOCK_REALTIME, mytime);
-    if(err < 0)
-        {DEBUG_RW("Error using clock_gettime: %i\n", err);}
-    set_fs(oldfs);
+    ktime_get_real_ts(mytime);
     callname = kzalloc(10, GFP_KERNEL);
     //DEBUG_RW(" current time:%ld\n", vutimes[0].tv_sec);
     if(times != NULL)
     {
-        if(times->actime - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - times->actime <= ALLOWED_TIME_DIFFERENCE
-          && times->modtime - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - times->modtime <= ALLOWED_TIME_DIFFERENCE)
+        if(times->actime - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && 
+           mytime->tv_sec - times->actime <= ALLOWED_TIME_DIFFERENCE && 
+           times->modtime - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && 
+           mytime->tv_sec - times->modtime <= ALLOWED_TIME_DIFFERENCE)
         {
             //No suspicious timechange has occured. Return early to save cycles.
             kfree(callname);
@@ -146,8 +168,10 @@ void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf 
     }
     else if(vutimes != NULL)
     {
-        if(vutimes[0].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - vutimes[0].tv_sec <= ALLOWED_TIME_DIFFERENCE
-           && vutimes[1].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - vutimes[1].tv_sec <= ALLOWED_TIME_DIFFERENCE)
+        if(vutimes[0].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && 
+           mytime->tv_sec - vutimes[0].tv_sec <= ALLOWED_TIME_DIFFERENCE && 
+           vutimes[1].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && 
+           mytime->tv_sec - vutimes[1].tv_sec <= ALLOWED_TIME_DIFFERENCE)
         {
             kfree(callname);
             kfree(mytime);
@@ -158,8 +182,10 @@ void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf 
     }
     else if (utimes != NULL)
     {
-        if(utimes[0].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - utimes[0].tv_sec <= ALLOWED_TIME_DIFFERENCE
-           && utimes[1].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && mytime->tv_sec - utimes[1].tv_sec <= ALLOWED_TIME_DIFFERENCE)
+        if(utimes[0].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && 
+           mytime->tv_sec - utimes[0].tv_sec <= ALLOWED_TIME_DIFFERENCE && 
+           utimes[1].tv_sec - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE && 
+           mytime->tv_sec - utimes[1].tv_sec <= ALLOWED_TIME_DIFFERENCE)
         {
             kfree(callname);
             kfree(mytime);
@@ -170,7 +196,9 @@ void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf 
     }
     else
     {
-        //System call made with null timestamp parameters. Suspect file will automatically be set to current system time. Nothing to do here
+        /* System call made with null timestamp parameters. 
+         * Suspect file will automatically be set to current system time. 
+         * Nothing to do here*/
         kfree(callname);
         kfree(mytime);
         return;
@@ -180,6 +208,7 @@ void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf 
     {
         //readlink won't null terminate strings by default. kzalloc sets the whole thing to 0's
         argument = kzalloc(32, GFP_KERNEL);
+        oldfs = get_fs();
         //Temporarily allow the usage of kernel memory addresses in system calls
         set_fs(KERNEL_DS);
         snprintf((char *) argument, 32, "/proc/self/fd/%i", dfd);
@@ -192,12 +221,13 @@ void general_timestamp_processor(int dfd, char __user *filename, struct utimbuf 
     }
     else
     {
-            set_fs(KERNEL_DS);
-            sys_getcwd( (char *) fullpath, DEFAULT_FILEPATH_SIZE);
-            set_fs(oldfs);
-            snprintf((char *) fullpath, DEFAULT_FILEPATH_SIZE, "%s%s", (char *) fullpath, filename);
+        oldfs = get_fs();
+        set_fs(KERNEL_DS);
+        sys_getcwd( (char *) fullpath, DEFAULT_FILEPATH_SIZE);
+        set_fs(oldfs);
+        snprintf((char *) fullpath, DEFAULT_FILEPATH_SIZE, "%s%s", (char *) fullpath, filename);
     }
-    write_log( (const char *) fullpath, 256);
+    write_log( (const char *) fullpath, DEFAULT_FILEPATH_SIZE);
     DEBUG_RW("%s used to set Timestamp for '%s' to", (char *) callname, (char *) fullpath);
     if(interceptedcall == UTIME_CALL)
         {DEBUG_RW(" a:%ld m:%ld\n",  times->actime, times->modtime);}
@@ -220,7 +250,7 @@ int logger_thread(void *data)
     {
         
         wait_event_interruptible(log_event, (to_log > 0));
-        DEBUG("Inside logger thread\n");
+        DEBUG("Processing log entry\n");
         /*
         head = smp_load_acquire(&log_circ_buf.head);
         tail = log_circ_buf.tail;
@@ -238,9 +268,8 @@ int logger_thread(void *data)
             set_fs(get_ds());
             ret = vfs_write(logfile, log_entry, len, &pos);
             set_fs(old_fs);
-            DEBUG("WROTE A LOG ENTRY: %i %s\n", len, log_entry);
+            //DEBUG("WROTE A LOG ENTRY: %i %s\n", len, log_entry);
         }
-
 
         to_log -= 1;
         if(kthread_should_stop() == true)
@@ -302,7 +331,7 @@ void hookts_init ( void )
     //grab function pointers for other system calls needed by program
     sys_readlink = (void *)sys_call_table[__NR_readlink];
     sys_getcwd = (void *)sys_call_table[__NR_getcwd];
-    sys_clock_gettime = (void *)sys_call_table[__NR_clock_gettime];
+    
 }
 
 void hookts_exit ( void )
