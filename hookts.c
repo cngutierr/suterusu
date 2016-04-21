@@ -7,6 +7,7 @@
 //#include <linux/circ_buf.h>
 #include <linux/mutex.h>
 #include <linux/kfifo.h>
+//Needed to use readlink
 //logger stuff
 
 DECLARE_WAIT_QUEUE_HEAD(log_event);
@@ -25,7 +26,9 @@ struct file *logfile;
 
 
 // pointer to the system call functions
+asmlinkage long (*sys_readlink)(const char __user *path, char __user *buf, int bufsiz);
 asmlinkage long (*sys_utime)(char __user *filename, struct utimbuf __user *times);
+asmlinkage long (*sys_utimes)(char __user *filename, struct timeval  __user *times);
 asmlinkage long (*sys_futimesat)(int dfd, char __user *filename, struct timeval __user *utimes);
 asmlinkage long (*sys_utimensat)(int dfd, char __user *filename, struct timespec __user *utimes, int flags);
 
@@ -107,6 +110,18 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
 
     return ret;
 }
+asmlinkage long n_sys_utimes(char __user *filename, struct timeval  __user *times)
+{
+    int ret;
+    #if __DEBUG_TS__
+    DEBUG_RW("utimes detected\n");
+    #endif
+    hijack_pause(sys_utimes);
+    ret = sys_utimes(filename, times);
+    hijack_resume(sys_utimes);
+    return ret;
+}
+
 asmlinkage long n_sys_futimesat (int dfd, char __user *filename, struct timeval __user *utimes)
 {
 
@@ -170,7 +185,82 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
 
     long ret;
     #if __DEBUG_TS__
-    DEBUG_RW("utimesat detected\n");
+    void *debug;
+    void *buf;
+    void *argument;
+    mm_segment_t oldfs;
+    int length = 0;
+    int err = 0;
+    DEBUG_RW("Utimensat detected\n");
+    //If the filename is null, we must be using a file descriptor
+    if(filename == NULL)
+    {
+        //readlink won't null terminate strings by default. kzalloc sets the whole thing to 0's
+        buf = kzalloc(256, GFP_KERNEL);
+        argument = kzalloc(32, GFP_KERNEL);
+        oldfs = get_fs();
+        //Temporarily allow the usage of kernel memory addresses in system calls
+        set_fs(KERNEL_DS);
+	    sys_readlink = (void *)sys_call_table[__NR_readlink];
+        snprintf((char *) argument, 32, "/proc/self/fd/%i", dfd);
+        //The length is one less byte to ensure the string is null terminated
+        err = sys_readlink((char *) argument, (char *) buf, 255);
+        set_fs(oldfs);
+        if(err < 0)
+        {
+            DEBUG_RW("Readlink error: %i\n", err);
+        }
+        else
+        {
+            DEBUG_RW("Timestamp for '%s' was changed to", (char *) buf);
+            //to do perhaps add a stat call here so we can see the current timestamp
+            DEBUG_RW(" a:%ld m:%ld\n",  utimes[0].tv_sec, utimes[1].tv_sec);
+            
+            write_log( (const char *) buf, 256);
+        }
+        kfree(buf);
+        kfree(argument);
+    }
+    else
+    {
+        //get the length of the filename from userspace
+        length = strnlen_user(filename, NAME_MAX);
+        if(length <= 0)
+        {
+           DEBUG_RW("Error: Failed to get the length of the file string\n");
+        }
+        else
+        {
+          // allocate some memory to copy the filename into kernel space
+          debug = kmalloc(length, GFP_KERNEL);
+          // failed to kmalloc, print some error message to dmesg
+          if ( ! debug )
+          {
+            DEBUG_RW("ERROR: Failed to allocate %i bytes for sys_utimensat debugging\n", length);
+          }
+          else
+          {
+            // copy the filename for user space into kernel space
+            if ( strncpy_from_user(debug, filename, length + 1) == 0)
+            {
+                DEBUG_RW("ERROR: Failed to copy %i bytes from user for sys_utimensat debugging\n", length);
+                kfree(debug);
+            }
+            else
+            {  
+                // print out the file that was accessed or other 
+                // debugging messages here.
+                DEBUG_RW("Timestamp for '%s' was changed to", (char *) debug);
+                //to do perhaps add a stat call here so we can see the current timestamp
+                DEBUG_RW(" a:%ld m:%ld\n",  utimes[0].tv_sec, utimes[1].tv_sec);
+            
+                write_log( (const char *) debug, length);
+
+                kfree(debug);
+            }
+          }
+        }
+    }
     #endif
     // do the heavy lefting here
     //hook_utime(filename, times);
@@ -230,6 +320,31 @@ int logger_thread(void *data)
     return 0;
 }
 
+
+void hijack_stop_all_hookts(void)
+{
+    // undo the hooking 
+    hijack_stop(sys_utime);
+    hijack_stop(sys_utimensat);
+    hijack_stop(sys_futimesat);
+    hijack_stop(sys_utimes);      
+}
+
+void hijack_start_all_hookts(void)
+{
+    // grab the function pointer from the sys_call_table
+    // and start intercepting calls
+    sys_utime = (void *)sys_call_table[__NR_utime];
+    sys_utimes = (void *)sys_call_table[__NR_utimes];
+    sys_utimensat = (void *)sys_call_table[__NR_utimensat];
+    sys_futimesat = (void *)sys_call_table[__NR_futimesat];
+    
+    hijack_start(sys_utime, &n_sys_utime);
+    hijack_start(sys_utimes, &n_sys_utimes);
+    hijack_start(sys_utimensat, &n_sys_utimensat);
+    hijack_start(sys_futimesat, &n_sys_futimesat);
+}
+
 void hookts_init ( void )
 {
     int ret;
@@ -249,24 +364,13 @@ void hookts_init ( void )
 
     logger_ts = kthread_run(logger_thread, NULL, "decms_logger");   
     
-    // grab the function pointer from the sys_call_table
-    // and start intercepting calls
-    sys_utime = (void *)sys_call_table[__NR_utime];
-    sys_utimensat = (void *)sys_call_table[__NR_utimensat];
-    sys_futimesat = (void *)sys_call_table[__NR_futimesat];
-    hijack_start(sys_utime, &n_sys_utime);
-    hijack_start(sys_utimensat, &n_sys_utimensat);
-    hijack_start(sys_futimesat, &n_sys_futimesat);
+    hijack_start_all_hookts();
+    
 }
 
 void hookts_exit ( void )
 {
     DEBUG("Unhooking sys_utime\n");
-    
-    // undo the hooking 
-    hijack_stop(sys_utime);
-    hijack_stop(sys_utimensat);
-    hijack_stop(sys_futimesat);
     
     //close the log file
     if(logfile)
@@ -275,6 +379,8 @@ void hookts_exit ( void )
     // stop the logger thread
     to_log = 1;
     kthread_stop(logger_ts);
+
+    hijack_stop_all_hookts();
     
     //remove fifo
     kfifo_free(&fifo_buf);
