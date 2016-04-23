@@ -152,7 +152,8 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
     return ret;
 }
 
-
+//This function takes the inputs of every system call that changes timestamps to reduce 
+//the number of lines needed to process them
 void general_timestamp_processor(int dfd,                       //add description of inputs here
                                  char __user *filename,
                                  struct utimbuf __user *times,
@@ -171,7 +172,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
     mytime = kzalloc(sizeof(struct timespec), GFP_KERNEL);
     ktime_get_real_ts(mytime);
     callname = kzalloc(10, GFP_KERNEL);
-    //DEBUG_RW(" current time:%ld\n", vutimes[0].tv_sec);
+    //Look at the inputs to figure out which function called this
     if(times != NULL)
     {
         if(times->actime - mytime->tv_sec <= ALLOWED_TIME_DIFFERENCE &&
@@ -235,6 +236,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
         oldfs = get_fs();
         //Temporarily allow the usage of kernel memory addresses in system calls
         set_fs(KERNEL_DS);
+        //Adapted from stackoverflow.com/questions/1188757/getting-filename-from-file-descriptor-in-c
         snprintf((char *) argument, 32, "/proc/self/fd/%i", dfd);
         //The length is one less byte to ensure the string is null terminated
         err = sys_readlink((char *) argument, (char *) fullpath, DEFAULT_FILEPATH_SIZE - 1);
