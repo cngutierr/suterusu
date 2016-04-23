@@ -45,7 +45,8 @@
 # define DEBUG_RW(fmt, ...)
 #endif
 
-extern unsigned long *sys_call_table;
+extern unsigned long *sys_call_table_decms;
+
 
 char *strnstr(const char *haystack, const char *needle, size_t n);
 void *memmem(const void *haystack, size_t haystack_size, const void *needle, size_t needle_size);

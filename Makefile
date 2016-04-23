@@ -64,7 +64,7 @@ ifndef KDIR
 	@echo "Must provide KDIR!"
 	@exit 1
 endif
-	$(MAKE) ARCH=x86_64 EXTRA_CFLAGS="-D_CONFIG_X86_64_ ${MODULES}" -C $(KDIR) M=$(PWD) modules
+	$(MAKE) KBUILD_EXTRA_SYMBOLS=$(KDIR)/Module.symvers ARCH=x86_64 EXTRA_CFLAGS="-D_CONFIG_X86_64_ ${MODULES}" -C $(KDIR) M=$(PWD) modules
 
 android-arm:
 ifndef KDIR

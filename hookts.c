@@ -4,7 +4,7 @@
 #include <linux/ktime.h>
 #include <linux/utime.h>
 #include <linux/kthread.h>
-//#include <linux/wait.h>
+#include <linux/audit.h>
 #include <linux/mutex.h>
 #include <linux/kfifo.h>
 //Needed to use readlink
@@ -24,11 +24,10 @@ struct circ_buf log_circ_buf;*/
 #define ALLOWED_TIME_DIFFERENCE 3
 DEFINE_MUTEX(write_lock);
 struct kfifo_rec_ptr_2 fifo_buf;
-
+struct audit_buffer *ab;
 volatile unsigned long to_log = 0;
 struct task_struct *logger_ts;
 struct file *logfile;
-
 
 // pointers to the system call functions being hijacked
 asmlinkage long (*sys_utime)(char __user *filename, struct utimbuf __user *times);
@@ -55,24 +54,30 @@ ssize_t write_log(const char* entry, size_t entry_size)
 
     if(mutex_lock_interruptible(&write_lock))
         return -1; //fail
+    if(audit_enabled)
+    {
+        ret = kfifo_in(&fifo_buf, entry, entry_size);
+    }
+    else
+    {
+      //get the current time
+      cur_time = kzalloc(sizeof(struct timespec), GFP_KERNEL);
+      ktime_get_real_ts(cur_time);
+      snprintf(timestamp, 22, "%lu.%lu", cur_time->tv_sec, cur_time->tv_nsec);
 
-    //get the current time
-    cur_time = kzalloc(sizeof(struct timespec), GFP_KERNEL);
-    ktime_get_real_ts(cur_time);
-    snprintf(timestamp, 22, "%lu.%lu", cur_time->tv_sec, cur_time->tv_nsec);
+      //final entry will contain the current timestamp and whatever else was passed in
+      final_entry_size = sizeof(timestamp) + entry_size + 2;
+      final_entry = kzalloc(final_entry_size, GFP_KERNEL);
+      snprintf(final_entry, final_entry_size, "%s\t%s\n", timestamp, entry);
 
-    //final entry will contain the current timestamp and whatever else was passed in
-    final_entry_size = sizeof(timestamp) + entry_size + 2;
-    final_entry = kzalloc(final_entry_size, GFP_KERNEL);
-    snprintf(final_entry, final_entry_size, "%s\t%s\n", timestamp, entry);
-
-    //push into fifo buf
-    ret = kfifo_in(&fifo_buf, final_entry, final_entry_size);
+      //push into fifo buf
+      ret = kfifo_in(&fifo_buf, final_entry, final_entry_size);
+      kfree(cur_time);
+      kfree(final_entry);
+    }
     mutex_unlock(&write_lock);
     to_log += 1;
     wake_up_interruptible(&log_event);
-    kfree(cur_time);
-    kfree(final_entry);
 
     return ret;
 }
@@ -286,14 +291,22 @@ int logger_thread(void *data)
 
         len = kfifo_out(&fifo_buf, log_entry, LOG_ENTRY_SIZE);
         log_entry[len] = '\0';
-        if(logfile)
+        if(audit_enabled)
         {
+            audit_log(NULL, GFP_ATOMIC, AUDIT_KERNEL_OTHER,
+                            "DecMS=%s", log_entry);
+        }
+        else
+        {
+           if(logfile)
+           {
             old_fs = get_fs();
             set_fs(get_ds());
             ret = vfs_write(logfile, log_entry, len, &pos);
             set_fs(old_fs);
             //DEBUG("WROTE A LOG ENTRY: %i %s\n", len, log_entry);
-        }
+            }
+        } 
 
         to_log -= 1;
         if(kthread_should_stop() == true)
@@ -318,12 +331,12 @@ void hijack_stop_all_hookts(void)
 
 void hijack_start_all_hookts(void)
 {
-    // grab the function pointer from the sys_call_table
+    // grab the function pointer from the sys_call_table_decms
     // and start intercepting calls
-    sys_utime = (void *)sys_call_table[__NR_utime];
-    sys_utimes = (void *)sys_call_table[__NR_utimes];
-    sys_utimensat = (void *)sys_call_table[__NR_utimensat];
-    sys_futimesat = (void *)sys_call_table[__NR_futimesat];
+    sys_utime = (void *)sys_call_table_decms[__NR_utime];
+    sys_utimes = (void *)sys_call_table_decms[__NR_utimes];
+    sys_utimensat = (void *)sys_call_table_decms[__NR_utimensat];
+    sys_futimesat = (void *)sys_call_table_decms[__NR_futimesat];
 
     hijack_start(sys_utime, &n_sys_utime);
     hijack_start(sys_utimes, &n_sys_utimes);
@@ -335,6 +348,16 @@ void hookts_init ( void )
 {
     int ret;
     DEBUG("Hooking sys_utime\n");
+    /*if(audit_enabled)
+    {
+        // for reference, I used:
+        // people.redhat.com/sgrubb/audit/audit-events.txt 
+        ab = audit_log_start(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER);
+        if(!ab)
+           DEBUG("Audid log failed to start!!\n");
+        audit_log_format(ab, "audid=%u ses=%u", 0, 0);
+        audit_log_task_context(ab);
+    }*/
     logfile = filp_open(LOG_FILE_STR, O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
     if(!logfile)
     {
@@ -353,8 +376,8 @@ void hookts_init ( void )
     hijack_start_all_hookts();
 
     //grab function pointers for other system calls needed by program
-    sys_readlink = (void *)sys_call_table[__NR_readlink];
-    sys_getcwd = (void *)sys_call_table[__NR_getcwd];
+    sys_readlink = (void *)sys_call_table_decms[__NR_readlink];
+    sys_getcwd = (void *)sys_call_table_decms[__NR_getcwd];
 
 }
 
