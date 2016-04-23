@@ -24,10 +24,10 @@ struct circ_buf log_circ_buf;*/
 #define ALLOWED_TIME_DIFFERENCE 3
 DEFINE_MUTEX(write_lock);
 struct kfifo_rec_ptr_2 fifo_buf;
-struct audit_buffer *ab;
 volatile unsigned long to_log = 0;
 struct task_struct *logger_ts;
 struct file *logfile;
+bool decms_log_running = false;
 
 // pointers to the system call functions being hijacked
 asmlinkage long (*sys_utime)(char __user *filename, struct utimbuf __user *times);
@@ -51,33 +51,39 @@ ssize_t write_log(const char* entry, size_t entry_size)
     char *final_entry;
     struct timespec *cur_time;
     char timestamp[22]; //stores the timestamp as a epoch string
+    ret = 0;
 
-    if(mutex_lock_interruptible(&write_lock))
-        return -1; //fail
-    if(audit_enabled)
+    if(decms_log_running)
     {
-        ret = kfifo_in(&fifo_buf, entry, entry_size);
+        if(mutex_lock_interruptible(&write_lock))
+            return -1; //fail
+        //get the current time
+        cur_time = kzalloc(sizeof(struct timespec), GFP_KERNEL);
+        ktime_get_real_ts(cur_time);
+        snprintf(timestamp, 22, "%lu.%lu", cur_time->tv_sec, cur_time->tv_nsec);
+
+        //final entry will contain the current timestamp and whatever else was passed in
+        final_entry_size = sizeof(timestamp) + entry_size + 2;
+        final_entry = kzalloc(final_entry_size, GFP_KERNEL);
+        snprintf(final_entry, final_entry_size, "%s\t%s\n", timestamp, entry);
+
+        //push into fifo buf
+        ret = kfifo_in(&fifo_buf, final_entry, final_entry_size);
+        kfree(cur_time);
+        kfree(final_entry);
+        mutex_unlock(&write_lock);
+        to_log += 1;
+        wake_up_interruptible(&log_event);
+    }
+    else if(audit_enabled)
+    {
+        audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,
+                  "DecMS=%s", entry);
     }
     else
     {
-      //get the current time
-      cur_time = kzalloc(sizeof(struct timespec), GFP_KERNEL);
-      ktime_get_real_ts(cur_time);
-      snprintf(timestamp, 22, "%lu.%lu", cur_time->tv_sec, cur_time->tv_nsec);
-
-      //final entry will contain the current timestamp and whatever else was passed in
-      final_entry_size = sizeof(timestamp) + entry_size + 2;
-      final_entry = kzalloc(final_entry_size, GFP_KERNEL);
-      snprintf(final_entry, final_entry_size, "%s\t%s\n", timestamp, entry);
-
-      //push into fifo buf
-      ret = kfifo_in(&fifo_buf, final_entry, final_entry_size);
-      kfree(cur_time);
-      kfree(final_entry);
+      DEBUG("ERROR LOGGING: auditd and decms_logger not running!!\n");
     }
-    mutex_unlock(&write_lock);
-    to_log += 1;
-    wake_up_interruptible(&log_event);
 
     return ret;
 }
@@ -87,7 +93,7 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
 
     long ret;
 #if __DEBUG_TS__
-   DEBUG_RW("utime detected\n");
+    DEBUG_RW("utime detected\n");
 #endif
     general_timestamp_processor(0, filename, times, NULL, NULL, 0);
 
@@ -115,7 +121,7 @@ asmlinkage long n_sys_futimesat (int dfd, char __user *filename, struct timeval 
 
     long ret;
 #if __DEBUG_TS__
-   DEBUG_RW("futimesat detected\n");
+    DEBUG_RW("futimesat detected\n");
 #endif
     // do the heavy lefting here
     general_timestamp_processor(dfd, filename, NULL, utimes, NULL, 0);
@@ -133,7 +139,7 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
 
     long ret;
 #if __DEBUG_TS__
-   DEBUG_RW("utimensat detected\n");
+    DEBUG_RW("utimensat detected\n");
 #endif
     // do the heavy lefting here
     general_timestamp_processor(dfd, filename, NULL, NULL, utimes, flags);
@@ -223,7 +229,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
     fullpath = kzalloc(DEFAULT_FILEPATH_SIZE, GFP_KERNEL);
     // if no file name was provided, use the file descriptor to the fullpath name
     if(filename == NULL)
-    {   
+    {
         //readlink won't null terminate strings by default. kzalloc sets the whole thing to 0's
         argument = kzalloc(32, GFP_KERNEL);
         oldfs = get_fs();
@@ -239,7 +245,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
             DEBUG_RW("Error using readlink: %i\n", err);
         }
 
-   
+
     }
     else  //if a file name was provided, get the full path
     {
@@ -279,34 +285,18 @@ int logger_thread(void *data)
     {
 
         wait_event_interruptible(log_event, (to_log > 0));
-        DEBUG("Processing log entry\n");
-        /*
-        head = smp_load_acquire(&log_circ_buf.head);
-        tail = log_circ_buf.tail;
-
-        DEBUG("Consumming data...\n");
-        item = &log_circ_buf.buf[tail];
-        smp_store_release(&log_circ_buf.tail,(tail + 1) & (BBB_SIZE - 1));
-        */
 
         len = kfifo_out(&fifo_buf, log_entry, LOG_ENTRY_SIZE);
         log_entry[len] = '\0';
-        if(audit_enabled)
-        {
-            audit_log(NULL, GFP_ATOMIC, AUDIT_KERNEL_OTHER,
-                            "DecMS=%s", log_entry);
-        }
-        else
-        {
-           if(logfile)
-           {
-            old_fs = get_fs();
-            set_fs(get_ds());
-            ret = vfs_write(logfile, log_entry, len, &pos);
-            set_fs(old_fs);
-            //DEBUG("WROTE A LOG ENTRY: %i %s\n", len, log_entry);
+            DEBUG("Processing log entry with decms_logger\n");
+            if(logfile)
+            {
+                old_fs = get_fs();
+                set_fs(get_ds());
+                ret = vfs_write(logfile, log_entry, len, &pos);
+                set_fs(old_fs);
+                //DEBUG("WROTE A LOG ENTRY: %i %s\n", len, log_entry);
             }
-        } 
 
         to_log -= 1;
         if(kthread_should_stop() == true)
@@ -344,35 +334,36 @@ void hijack_start_all_hookts(void)
     hijack_start(sys_futimesat, &n_sys_futimesat);
 }
 
+
 void hookts_init ( void )
 {
     int ret;
     DEBUG("Hooking sys_utime\n");
-    /*if(audit_enabled)
+    
+    /*
+     * At the start of the program, check to see if auditd is running
+     * if it is not running, use the decms logger. If auditd is turned on
+     * after this point, we will still use the decms logger.
+     */
+    if(!audit_enabled)
     {
-        // for reference, I used:
-        // people.redhat.com/sgrubb/audit/audit-events.txt 
-        ab = audit_log_start(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER);
-        if(!ab)
-           DEBUG("Audid log failed to start!!\n");
-        audit_log_format(ab, "audid=%u ses=%u", 0, 0);
-        audit_log_task_context(ab);
-    }*/
-    logfile = filp_open(LOG_FILE_STR, O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
-    if(!logfile)
-    {
-        DEBUG("Failed to open logfile '%s'\n", LOG_FILE_STR);
-    }
-    //log_circ_buf.buf = big_bad_buf;
-    // init the fifo buf
-    ret = kfifo_alloc(&fifo_buf, FIFO_SIZE, GFP_KERNEL);
-    if(ret)
-    {
-        DEBUG("Error allocating fifo log buff");
-    }
+        DEBUG("'auditd' is not running... use 'dems_logger'");
+        logfile = filp_open(LOG_FILE_STR, O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
+        if(!logfile)
+        {
+            DEBUG("Failed to open logfile '%s'\n", LOG_FILE_STR);
+        }
+        //log_circ_buf.buf = big_bad_buf;
+        // init the fifo buf
+        ret = kfifo_alloc(&fifo_buf, FIFO_SIZE, GFP_KERNEL);
+        if(ret)
+        {
+            DEBUG("Error allocating fifo log buff");
+        }
 
-    logger_ts = kthread_run(logger_thread, NULL, "decms_logger");
-
+        logger_ts = kthread_run(logger_thread, NULL, "decms_logger");
+        decms_log_running = true;
+    }
     hijack_start_all_hookts();
 
     //grab function pointers for other system calls needed by program
@@ -385,14 +376,17 @@ void hookts_exit ( void )
 {
     DEBUG("Unhooking sys_utime\n");
 
-    //close the log file
-    if(logfile)
-        filp_close(logfile, NULL);
 
-    // stop the logger thread
-    to_log = 1;
-    kthread_stop(logger_ts);
-
+    if(decms_log_running)
+    {
+        //close the log file
+        if(logfile)
+            filp_close(logfile, NULL);
+        // stop the logger thread
+        to_log = 1;
+        kthread_stop(logger_ts);
+        decms_log_running = false;
+    }
     hijack_stop_all_hookts();
 
     //remove fifo
