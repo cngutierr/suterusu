@@ -391,8 +391,9 @@ void hijack_start_all_hookts(void)
 void hookts_init ( void )
 {
     int ret;
+    float test;
     DEBUG("Hooking sys_utime\n");
-    
+       
     /*
      * At the start of the program, check to see if auditd is running
      * if it is not running, use the decms logger. If auditd is turned on
@@ -416,6 +417,10 @@ void hookts_init ( void )
 
         logger_ts = kthread_run(logger_thread, NULL, "decms_logger");
         decms_log_running = true;
+    }
+    else
+    {
+        DEBUG("'auditd' will log events.\n");
     }
     hijack_start_all_hookts();
 
