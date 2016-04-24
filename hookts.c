@@ -250,9 +250,9 @@ void general_timestamp_processor(int dfd,                       //add descriptio
     // if no file name was provided, use the file descriptor to the fullpath name
     if(filename == NULL)
     {
-        if(vfs_fstat(dfd, &file_stat) > 0)
+        if(vfs_fstat(dfd, &file_stat) >= 0)
         {
-          snprintf(oldts, 512, "a: %lu.%lu m: %lu.%lu", file_stat.atime.tv_sec, 
+          snprintf(oldts, 64, "a: %lu.%lu m: %lu.%lu", file_stat.atime.tv_sec, 
                                                  file_stat.atime.tv_nsec,
                                                  file_stat.mtime.tv_sec,
                                                  file_stat.mtime.tv_nsec);
@@ -280,11 +280,22 @@ void general_timestamp_processor(int dfd,                       //add descriptio
     }
     else  //if a file name was provided, get the full path
     {
+        
         oldfs = get_fs();
         set_fs(KERNEL_DS);
         sys_getcwd(fullpath, DEFAULT_FILEPATH_SIZE);
         set_fs(oldfs);
         snprintf(fullpath, DEFAULT_FILEPATH_SIZE, "%s%s", fullpath, filename);
+
+        if(vfs_stat(filename, &file_stat) >= 0)
+        {
+          snprintf(oldts, 64, "a: %lu.%lu m: %lu.%lu", file_stat.atime.tv_sec, 
+                                                 file_stat.atime.tv_nsec,
+                                                 file_stat.mtime.tv_sec,
+                                                 file_stat.mtime.tv_nsec);
+        }
+        else
+            DEBUG("Error with vfs_stat\n");
     }
     write_log( (const char *) fullpath, DEFAULT_FILEPATH_SIZE);
     DEBUG_RW("%s used to set Timestamp for '%s' to", callname, fullpath);
