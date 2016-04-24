@@ -45,6 +45,7 @@ void general_timestamp_processor(int dfd, char __user *filename,
                                  struct timespec __user *utimes,
                                  int flags);
 
+
 ssize_t write_log(const char* entry, size_t entry_size)
 {
     int ret, final_entry_size;
@@ -78,7 +79,7 @@ ssize_t write_log(const char* entry, size_t entry_size)
     else if(audit_enabled)
     {
         audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,
-                  "DecMS=%s", entry);
+                  "DecMS: %s", entry);
     }
     else
     {
@@ -86,6 +87,15 @@ ssize_t write_log(const char* entry, size_t entry_size)
     }
 
     return ret;
+}
+ssize_t write_ts_log(const char* sys_call_name, const char* filename, const char* oldts, const char* newts)
+{
+    char buf[512];
+    int len;
+    len = snprintf(buf, 512, "callname=%s file=%s oldts=(%s) newts=(%s)", 
+                        sys_call_name, filename, oldts, newts);   
+    
+    return write_log(buf, len);
 }
 
 asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times)
@@ -163,14 +173,23 @@ void general_timestamp_processor(int dfd,                       //add descriptio
 {
     int interceptedcall;
     int err;
-    void *fullpath;
-    void *argument;
-    void *callname;
-    struct timespec *mytime;
+    char *fullpath;  //name of the file
+    char *argument;  //argment for system call (may not be needed)
+    char *callname;  //name of the system call
+    char *newts;     //new timestamp
+    char *oldts;     //old timestamp
+    struct timespec *mytime; //current time
+    struct kstat file_stat;
+
     mm_segment_t oldfs;
 
     mytime = kzalloc(sizeof(struct timespec), GFP_KERNEL);
     ktime_get_real_ts(mytime);
+    
+    
+    oldts = kzalloc(64, GFP_KERNEL);
+    newts = kzalloc(64, GFP_KERNEL);
+
     callname = kzalloc(10, GFP_KERNEL);
     //Look at the inputs to figure out which function called this
     if(times != NULL)
@@ -186,7 +205,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
             return;
         }
         interceptedcall = UTIME_CALL;
-        snprintf((char *) callname , 10, "utime");
+        snprintf(callname , 10, "utime");
     }
     else if(vutimes != NULL)
     {
@@ -200,7 +219,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
             return;
         }
         interceptedcall = FUTIMESAT_CALL;
-        snprintf((char *) callname , 10, "futimesat");
+        snprintf(callname , 10, "futimesat");
     }
     else if (utimes != NULL)
     {
@@ -214,7 +233,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
             return;
         }
         interceptedcall = UTIMENSAT_CALL;
-        snprintf((char *) callname , 10, "utimensat");
+        snprintf(callname , 10, "utimensat");
     }
     else
     {
@@ -231,15 +250,25 @@ void general_timestamp_processor(int dfd,                       //add descriptio
     // if no file name was provided, use the file descriptor to the fullpath name
     if(filename == NULL)
     {
+        if(vfs_fstat(dfd, &file_stat) > 0)
+        {
+          snprintf(oldts, 512, "a: %lu.%lu m: %lu.%lu", file_stat.atime.tv_sec, 
+                                                 file_stat.atime.tv_nsec,
+                                                 file_stat.mtime.tv_sec,
+                                                 file_stat.mtime.tv_nsec);
+        }
+        else 
+          DEBUG_RW("vfs_fstat failed!\n");
+
         //readlink won't null terminate strings by default. kzalloc sets the whole thing to 0's
         argument = kzalloc(32, GFP_KERNEL);
         oldfs = get_fs();
         //Temporarily allow the usage of kernel memory addresses in system calls
         set_fs(KERNEL_DS);
         //Adapted from stackoverflow.com/questions/1188757/getting-filename-from-file-descriptor-in-c
-        snprintf((char *) argument, 32, "/proc/self/fd/%i", dfd);
+        snprintf(argument, 32, "/proc/self/fd/%i", dfd);
         //The length is one less byte to ensure the string is null terminated
-        err = sys_readlink((char *) argument, (char *) fullpath, DEFAULT_FILEPATH_SIZE - 1);
+        err = sys_readlink(argument, fullpath, DEFAULT_FILEPATH_SIZE - 1);
         kfree(argument);
         set_fs(oldfs);
         if(err < 0)
@@ -253,27 +282,38 @@ void general_timestamp_processor(int dfd,                       //add descriptio
     {
         oldfs = get_fs();
         set_fs(KERNEL_DS);
-        sys_getcwd( (char *) fullpath, DEFAULT_FILEPATH_SIZE);
+        sys_getcwd(fullpath, DEFAULT_FILEPATH_SIZE);
         set_fs(oldfs);
-        snprintf((char *) fullpath, DEFAULT_FILEPATH_SIZE, "%s%s", (char *) fullpath, filename);
-
+        snprintf(fullpath, DEFAULT_FILEPATH_SIZE, "%s%s", fullpath, filename);
     }
     write_log( (const char *) fullpath, DEFAULT_FILEPATH_SIZE);
-    DEBUG_RW("%s used to set Timestamp for '%s' to", (char *) callname, (char *) fullpath);
+    DEBUG_RW("%s used to set Timestamp for '%s' to", callname, fullpath);
+    
+    
     if(interceptedcall == UTIME_CALL)
     {
-        DEBUG_RW(" a:%ld m:%ld\n",  times->actime, times->modtime);
+        snprintf(newts, 64, "a: %lu m:%lu",times->actime, times->modtime);
+        DEBUG_RW(" %s\n", newts);
+        
     }
     else if(interceptedcall == FUTIMESAT_CALL)
     {
-        DEBUG_RW(" a:%ld m:%ld\n",  vutimes[0].tv_sec, vutimes[1].tv_sec);
+        snprintf(newts, 64, "a: %lu.%lu m:%lu.%lu", vutimes[0].tv_sec, vutimes[0].tv_usec,
+                                                    vutimes[1].tv_sec, vutimes[1].tv_usec);
+        DEBUG_RW(" %s\n", newts);
     }
     else
     {
-        DEBUG_RW(" a:%ld m:%ld\n",  utimes[0].tv_sec, utimes[1].tv_sec);
+        snprintf(newts, 64, "a: %lu.%lu m:%lu.%lu", utimes[0].tv_sec, utimes[0].tv_nsec,
+                                                    utimes[1].tv_sec, utimes[1].tv_nsec);
+        DEBUG_RW(" %s\n", newts);
     }
+    write_ts_log(callname, fullpath, oldts, newts);
+    kfree(mytime);
     kfree(callname);
     kfree(fullpath);
+    kfree(newts);
+    kfree(oldts);
 }
 
 int logger_thread(void *data)
