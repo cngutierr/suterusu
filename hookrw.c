@@ -1,4 +1,5 @@
 #include "common.h"
+#include "logging.h"
 #include <asm/i387.h>
 #include <asm/uaccess.h>
 #include "rand_test.h"
@@ -96,6 +97,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
               if(count > 32 && freq_monobit_test((unsigned char*) debug, (int) count) == 1)
               {
                 DEBUG_RW("Random buf: %i\n", (int) count);
+                write_fd_log(fd);
               }
               //kernel_fpu_end();
             if ( memstr(debug, pattern, count) )
