@@ -1,4 +1,5 @@
 #include "rand_test.h"
+#include <stdio.h>
 int bit_sum(unsigned char *buf, int len)
 {
   int i;
@@ -19,6 +20,7 @@ int freq_monobit_test(unsigned char *buf, int len)
     float s_obs;
     int sum;
     float p_value;
+    union Number tmp;
     /*
      * first, calculate the bits sum, 
      * if bit === 0: 1, else -1. A bit
@@ -29,6 +31,7 @@ int freq_monobit_test(unsigned char *buf, int len)
      * S_n as defined by NIST
      */
     sum = bit_sum(buf, len);
+    printf("\nsum: %i\n", sum);
     /*
      * Next, calculate the the stats test
      * which is:
@@ -37,7 +40,12 @@ int freq_monobit_test(unsigned char *buf, int len)
      *
      * s_obs as defined by NIST 
      */
-    s_obs = (sum < 0 ? -1*sum : sum ) / no_math_sqrt(len);
+    
+    len *= 8;
+    tmp.i = no_math_sqrt(len);
+    s_obs = (sum < 0 ? -1*sum : sum ) / tmp.f;
+    printf("\nlen: %i  nsqrt: %f\n", len, tmp.f);
+    printf("\ns_obs: %f\n", s_obs);
     
     /*
      * Finally, compute the P-value:
@@ -45,7 +53,9 @@ int freq_monobit_test(unsigned char *buf, int len)
      * 
      * P-value as defined by NIST
      */
-    
-    p_value = no_math_erfc(s_obs/no_math_sqrt(2));
+    tmp.i = no_math_sqrt(2);
+    tmp.i = no_math_erfc(s_obs/tmp.f);
+    printf("\np_val: %f\n", tmp.f);
+    p_value = tmp.f;
     return p_value < 0.01 ? 0 : 1;
 }

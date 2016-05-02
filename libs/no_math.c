@@ -465,23 +465,28 @@ float SQRT_TAB[4096] =
 63.874878, 63.882705, 63.890531, 63.898357, 63.906181, 63.914005, 63.921827, 63.929649, 63.937469, 63.945289, 
 63.953108, 63.960926, 63.968742, 63.976558, 63.984373, 63.992187, };
 
-float no_math_erfc(float in)
+unsigned int no_math_erfc(float in)
 {
     int index;
+    union Number out;
     if(in > 2.5)
         return 0.0;
     else if(in <= -2.5)
         return 2.0;
     //convert the input to a useable index
     index = (int)(in*100 + 250);
-    return ERFC_TAB[index];
+    
+    out.f = ERFC_TAB[index];
+    return out.i;
 }
 
-float no_math_sqrt(int in)
+unsigned int no_math_sqrt(int in)
 {
+  union Number out;
   if(in >= SQRT_TAB_MIN && in < SQRT_TAB_MAX)
   {
-    return SQRT_TAB[in];
+    out.f = SQRT_TAB[in];
+    return out.i;
   }
   return -1;
 }

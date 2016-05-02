@@ -391,11 +391,8 @@ void hijack_start_all_hookts(void)
 void hookts_init ( void )
 {
     int ret;
-    unsigned long test;
     DEBUG("Hooking sys_utime\n");
 
-    test = int_sqrt(10);    
-    DEBUG("FLOAT: %i\n", test);
     /*
      * At the start of the program, check to see if auditd is running
      * if it is not running, use the decms logger. If auditd is turned on

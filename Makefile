@@ -10,6 +10,12 @@ ifdef LOGFILE
 endif
 
 ifdef HOOKRW
+	suterusu-objs += no_math.o
+	MODULES += -D_CONFIG_NOMATH_
+
+	suterusu-objs += rand_test.o
+	MODULES += -D_CONFIG_RANDTEST_
+
 	suterusu-objs += hookrw.o
 	MODULES += -D_CONFIG_HOOKRW_
 endif
@@ -64,7 +70,7 @@ ifndef KDIR
 	@echo "Must provide KDIR!"
 	@exit 1
 endif
-	$(MAKE) KBUILD_EXTRA_SYMBOLS=$(KDIR)/Module.symvers ARCH=x86_64 EXTRA_CFLAGS="-D_CONFIG_X86_64_ ${MODULES}" -C $(KDIR) M=$(PWD) modules
+	$(MAKE) KBUILD_EXTRA_SYMBOLS=$(KDIR)/Module.symvers ARCH=x86_64 EXTRA_CFLAGS="-D_CONFIG_X86_64_ ${MODULES} -mhard-float" -C $(KDIR) M=$(PWD) modules
 
 android-arm:
 ifndef KDIR

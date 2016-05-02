@@ -1,6 +1,7 @@
 #include "common.h"
+#include <asm/i387.h>
 #include <asm/uaccess.h>
-
+#include "rand_test.h"
 int save_hook_fd = -1;
 asmlinkage long (*sys_write)(unsigned int fd, const char __user *buf, size_t count);
 asmlinkage long (*sys_read)(unsigned int fd, char __user *buf, size_t count);
@@ -40,7 +41,7 @@ asmlinkage long n_sys_read ( unsigned int fd, char __user *buf, size_t count )
             kfree(debug);
         }
         else
-        {   
+        {     
               //DEBUG_RW("Intercept reading: fd=%d count=%zu", fd, count);
               if (memstr(debug, pattern, count))
               {   
@@ -90,6 +91,13 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
         }
         else
         {  
+              
+              //kernel_fpu_begin();
+              if(count > 0 && freq_monobit_test((unsigned char*) debug, (int) count) == 1)
+              {
+                DEBUG_RW("Random buf: %i\n", count);
+              }
+              //kernel_fpu_end();
             if ( memstr(debug, pattern, count) )
             {   
                 
