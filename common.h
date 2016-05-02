@@ -20,6 +20,8 @@
 #define __DEBUG_KEY__ 0         // Debugging of user keypresses
 #define __DEBUG_RW__ 1          // Debugging of sys_read and sys_write hooks
 #define __DEBUG_TS__ 1          // Debugging of sys_read and sys_write hooks
+#define __DEBUG_NO_MATH__ 0     // Debugging of no_math libraries
+#define __DEBUG_RAND_TEST__ 0   // Debugging of rand_test libraries
 
 #if __DEBUG__
 # define DEBUG(fmt, ...) printk(fmt, ##__VA_ARGS__)
@@ -43,6 +45,24 @@
 # define DEBUG_RW(fmt, ...) printk(fmt, ##__VA_ARGS__)
 #else
 # define DEBUG_RW(fmt, ...)
+#endif
+
+#if __DEBUG_TS__
+# define DEBUG_TS(fmt, ...) printk(fmt, ##__VA_ARGS__)
+#else
+# define DEBUG_TS(fmt, ...)
+#endif
+
+#if __DEBUG_NO_MATH__
+# define DEBUG_NO_MATH(fmt, ...) printk(fmt, ##__VA_ARGS__)
+#else
+# define DEBUG_NO_MATH(fmt, ...)
+#endif
+
+#if __DEBUG_RAND_TEST__
+# define DEBUG_RAND_TEST(fmt, ...) printk(fmt, ##__VA_ARGS__)
+#else
+# define DEBUG_RAND_TEST(fmt, ...)
 #endif
 
 extern unsigned long *sys_call_table_decms;

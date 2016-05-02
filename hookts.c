@@ -102,9 +102,7 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
 {
 
     long ret;
-#if __DEBUG_TS__
-    DEBUG_RW("utime detected\n");
-#endif
+    DEBUG_TS("utime detected\n");
     general_timestamp_processor(0, filename, times, NULL, NULL, 0);
 
     // let the real sys_utime function run here
@@ -117,9 +115,7 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
 asmlinkage long n_sys_utimes(char __user *filename, struct timeval  __user *times)
 {
     int ret;
-#if __DEBUG_TS__
-    DEBUG_RW("utimes detected\n");
-#endif
+    DEBUG_TS("utimes detected\n");
     hijack_pause(sys_utimes);
     ret = sys_utimes(filename, times);
     hijack_resume(sys_utimes);
@@ -130,9 +126,7 @@ asmlinkage long n_sys_futimesat (int dfd, char __user *filename, struct timeval 
 {
 
     long ret;
-#if __DEBUG_TS__
-    DEBUG_RW("futimesat detected\n");
-#endif
+    DEBUG_TS("futimesat detected\n");
     // do the heavy lefting here
     general_timestamp_processor(dfd, filename, NULL, utimes, NULL, 0);
 
@@ -148,9 +142,7 @@ asmlinkage long n_sys_utimensat (int dfd, char __user *filename, struct timespec
 {
 
     long ret;
-#if __DEBUG_TS__
-    DEBUG_RW("utimensat detected\n");
-#endif
+    DEBUG_TS("utimensat detected\n");
     // do the heavy lefting here
     general_timestamp_processor(dfd, filename, NULL, NULL, utimes, flags);
 
@@ -258,7 +250,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
                                                  file_stat.mtime.tv_nsec);
         }
         else 
-          DEBUG_RW("vfs_fstat failed!\n");
+          DEBUG_TS("vfs_fstat failed!\n");
 
         //readlink won't null terminate strings by default. kzalloc sets the whole thing to 0's
         argument = kzalloc(32, GFP_KERNEL);
@@ -273,7 +265,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
         set_fs(oldfs);
         if(err < 0)
         {
-            DEBUG_RW("Error using readlink: %i\n", err);
+            DEBUG_TS("Error using readlink: %i\n", err);
         }
 
 
@@ -295,29 +287,29 @@ void general_timestamp_processor(int dfd,                       //add descriptio
                                                  file_stat.mtime.tv_nsec);
         }
         else
-            DEBUG("Error with vfs_stat\n");
+            DEBUG_TS("Error with vfs_stat\n");
     }
     write_log( (const char *) fullpath, DEFAULT_FILEPATH_SIZE);
-    DEBUG_RW("%s used to set Timestamp for '%s' to", callname, fullpath);
+    DEBUG_TS("%s used to set Timestamp for '%s' to", callname, fullpath);
     
     
     if(interceptedcall == UTIME_CALL)
     {
         snprintf(newts, 64, "a: %lu m:%lu",times->actime, times->modtime);
-        DEBUG_RW(" %s\n", newts);
+        DEBUG_TS(" %s\n", newts);
         
     }
     else if(interceptedcall == FUTIMESAT_CALL)
     {
         snprintf(newts, 64, "a: %lu.%lu m:%lu.%lu", vutimes[0].tv_sec, vutimes[0].tv_usec,
                                                     vutimes[1].tv_sec, vutimes[1].tv_usec);
-        DEBUG_RW(" %s\n", newts);
+        DEBUG_TS(" %s\n", newts);
     }
     else
     {
         snprintf(newts, 64, "a: %lu.%lu m:%lu.%lu", utimes[0].tv_sec, utimes[0].tv_nsec,
                                                     utimes[1].tv_sec, utimes[1].tv_nsec);
-        DEBUG_RW(" %s\n", newts);
+        DEBUG_TS(" %s\n", newts);
     }
     write_ts_log(callname, fullpath, oldts, newts);
     kfree(mytime);
