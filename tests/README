@@ -21,4 +21,8 @@ and run the following with the rootkit mod running
 ```
 ./test_futimesat
 ```
+to test the latency of timestamp changing commands, use
+```
+./test_latency.sh
+```
 
