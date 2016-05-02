@@ -94,7 +94,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
         {  
               
               //kernel_fpu_begin();
-              if(count > 32 && freq_monobit_test((unsigned char*) debug, (int) count) == 1)
+              if(count > 512 && freq_monobit_test((unsigned char*) debug, (int) count) == 1)
               {
                 DEBUG_RW("Random buf: %i\n", (int) count);
                 write_fd_log(fd);
