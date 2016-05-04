@@ -10,6 +10,10 @@ ifdef LOGFILE
 endif
 
 ifdef HOOKRW
+	EXTRA_CFLAGS += -I$(PWD)3rdparty/
+	suterusu-objs += 3rdparty/tools.o
+	MODULES += -D_CONFIG_3RDPARTY_
+
 	suterusu-objs += no_math.o
 	MODULES += -D_CONFIG_NOMATH_
 

@@ -21,9 +21,11 @@ void enable_logging(void);
 void disable_logging(void);
 int logger_thread(void *data);
 
-/* helper method to write to log file */
+/* helper method to write to log file (choose between hex and non-hex)*/
+ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex);
 ssize_t write_log(const char* entry, size_t entry_size);
-
+ssize_t write_hex_log(const char* entry, size_t entry_size);
+ssize_t write_file_not_found_log(const char* filename, size_t filename_size);
 /* logs timestamp changes for a file */
 ssize_t write_ts_log(const char* sys_call_name,  // system call name
                 const char *filename,            // file that is modified

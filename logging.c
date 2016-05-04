@@ -1,4 +1,5 @@
 #include "logging.h"
+#include "3rdparty/tools.h"
 DECLARE_WAIT_QUEUE_HEAD(log_event);
 DEFINE_MUTEX(write_lock);
 struct kfifo_rec_ptr_2 fifo_buf;
@@ -96,12 +97,25 @@ int logger_thread(void *data)
     return 0;
 }
 
+/* Lazy... don't want to refactor =( */
 ssize_t write_log(const char* entry, size_t entry_size)
+{
+    return _write_log(entry, entry_size, 0);
+}
+
+ssize_t write_hex_log(const char* entry, size_t entry_size)
+{
+   return _write_log(entry, entry_size, 1);
+}
+
+ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex)
 {
     int ret, final_entry_size;
     char *final_entry;
     struct timespec *cur_time;
     char timestamp[22]; //stores the timestamp as a epoch string
+    char *hexified_entry;
+    int hexified_entry_size;
     ret = 0;
     
     if(entry_size < 0)
@@ -122,7 +136,7 @@ ssize_t write_log(const char* entry, size_t entry_size)
         //final entry will contain the current timestamp and whatever else was passed in
         final_entry_size = sizeof(timestamp) + entry_size + 2;
         final_entry = kzalloc(final_entry_size, GFP_KERNEL);
-        snprintf(final_entry, final_entry_size, "%s\t%s\n", timestamp, entry);
+        snprintf( final_entry, final_entry_size, "%s\t%s\n", timestamp, entry);
 
         //push into fifo buf
         ret = kfifo_in(&fifo_buf, final_entry, final_entry_size);
@@ -134,8 +148,21 @@ ssize_t write_log(const char* entry, size_t entry_size)
     }
     else if(audit_enabled)
     {
-        audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,
+        if(as_hex)
+        {
+            // hexify the input
+            hexified_entry_size = entry_size * 2 + 1;
+            hexified_entry = kzalloc(hexified_entry_size, GFP_KERNEL);
+            hexify( (const uint8_t *)entry, entry_size, hexified_entry, hexified_entry_size);
+            audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,
+                  "DecMS: %s", hexified_entry);
+            kfree(hexified_entry);
+        }
+        else
+        {
+            audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,
                   "DecMS: %s", entry);
+        }
     }
     else
     {
@@ -187,6 +214,20 @@ ssize_t write_fd_log(unsigned int fd)
     if(fullpath_name[0] != '/')
     {
         // this is not a file on the disk
+        DEBUG("'%s' is not a file on the disk!\n", fullpath_name);
+        set_fs(old_fs);
+        kfree(sim_link);
+        kfree(fullpath_name);
+        return 0;
+    }
+    else if(memstr(fullpath_name, "/var/log/audit/audit.log", 255) ||
+            memstr(fullpath_name, "/var/log/auth.log", 255) ||
+            memstr(fullpath_name, "/var/log/syslog", 255) ||
+            memstr(fullpath_name, "/dev/pts/", 255) ||
+            memstr(fullpath_name, "/dev/null", 255))
+    {
+  
+        DEBUG("'%s' is a white listed file!\n", fullpath_name);
         set_fs(old_fs);
         kfree(sim_link);
         kfree(fullpath_name);
@@ -206,8 +247,13 @@ ssize_t write_fd_log(unsigned int fd)
         if(vfs_read(save_file, file_content_buf, 4096, &pos) >= 0)
         {
          DEBUG("File found, write out buffer, offset = %i\n", (int)pos);
-         write_log(file_content_buf, 4096);
-        } 
+         ret = write_hex_log(file_content_buf, 4096);
+        }
+        else
+        {
+         DEBUG("'%s' not found... log incident", fullpath_name);
+         ret = write_file_not_found_log(fullpath_name, 256);
+        }
     }
     else
     {   
@@ -225,4 +271,16 @@ ssize_t write_fd_log(unsigned int fd)
     kfree(file_content_buf);
     
     return ret;
+}
+
+ssize_t write_file_not_found_log(const char* filename, size_t filename_size)
+{
+   char* log_buf;
+   int log_buf_size = filename_size + 256;
+   ssize_t ret;
+   log_buf = kzalloc(log_buf_size, GFP_KERNEL);
+   snprintf(log_buf, log_buf_size, "Buffer writing to '%s' contains random binary", filename);
+   ret = write_log(log_buf, log_buf_size);
+   kfree(log_buf);
+   return ret;
 }
