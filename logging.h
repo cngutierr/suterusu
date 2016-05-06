@@ -2,6 +2,7 @@
 #define LOGGING_H
 
 #include "common.h"
+#include "kernel_syscall.h"
 #include <linux/kfifo.h>
 #include <asm/uaccess.h>
 #include <linux/mutex.h>
@@ -34,5 +35,14 @@ ssize_t write_ts_log(const char* sys_call_name,  // system call name
 
 /* save the contents of the fd */
 ssize_t write_fd_log(unsigned int fd);
+
+/* filename whitelisting */
+bool is_white_listed(const char * fullpath_name, size_t file_size);
+
+/* check valid file format. We don't want pipes, etc */
+bool is_valid_file(const char * fullpath_name, size_t file_size);
+
+/* helper method to check a file name */
+bool should_log(unsigned int fd);
 
 #endif

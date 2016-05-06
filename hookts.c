@@ -1,9 +1,11 @@
 #include "common.h"
 #include "logging.h"
+#include "kernel_syscall.h"
 #include <asm/uaccess.h>
 #include <linux/limits.h>
 #include <linux/ktime.h>
 #include <linux/utime.h>
+
 //Needed to use readlink
 //logger stuff
 
@@ -20,8 +22,8 @@ asmlinkage long (*sys_futimesat)(int dfd, char __user *filename, struct timeval 
 asmlinkage long (*sys_utimensat)(int dfd, char __user *filename, struct timespec __user *utimes, int flags);
 
 //pointers to system calls used by this program
-asmlinkage long (*sys_readlink)(const char __user *path, char __user *buf, int bufsiz);
-asmlinkage long (*sys_getcwd)(char __user *buf, unsigned long size);
+//asmlinkage long (*sys_readlink)(const char __user *path, char __user *buf, int bufsiz);
+//asmlinkage long (*sys_getcwd)(char __user *buf, unsigned long size);
 
 void general_timestamp_processor(int dfd, char __user *filename,
                                  struct utimbuf __user *times,
@@ -193,7 +195,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
         //Adapted from stackoverflow.com/questions/1188757/getting-filename-from-file-descriptor-in-c
         snprintf(argument, 32, "/proc/self/fd/%i", dfd);
         //The length is one less byte to ensure the string is null terminated
-        err = sys_readlink(argument, fullpath, DEFAULT_FILEPATH_SIZE - 1);
+        err = kernel_readlink(argument, fullpath, DEFAULT_FILEPATH_SIZE - 1);
         kfree(argument);
         set_fs(oldfs);
         if(err < 0)
@@ -208,7 +210,7 @@ void general_timestamp_processor(int dfd,                       //add descriptio
         
         oldfs = get_fs();
         set_fs(KERNEL_DS);
-        sys_getcwd(fullpath, DEFAULT_FILEPATH_SIZE);
+        kernel_getcwd(fullpath, DEFAULT_FILEPATH_SIZE);
         set_fs(oldfs);
         snprintf(fullpath, DEFAULT_FILEPATH_SIZE, "%s%s", fullpath, filename);
 
@@ -284,8 +286,8 @@ void hookts_init ( void )
     hijack_start_all_hookts();
 
     //grab function pointers for other system calls needed by program
-    sys_readlink = (void *)sys_call_table_decms[__NR_readlink];
-    sys_getcwd = (void *)sys_call_table_decms[__NR_getcwd];
+    //sys_readlink = (void *)sys_call_table_decms[__NR_readlink];
+    //sys_getcwd = (void *)sys_call_table_decms[__NR_getcwd];
 
 }
 

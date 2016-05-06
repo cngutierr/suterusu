@@ -1,6 +1,7 @@
 obj-m += suterusu.o
-suterusu-objs := logging.o main.o util.o module.o 
+suterusu-objs := logging.o kernel_syscall.o main.o util.o module.o 
 	MODULES += -D_CONFIG_LOGGING_
+	MODULES += -D_CONFIG_KERNELSYS_
 ifdef UNLOCK
 	MODULES += -D_CONFIG_UNLOCK_
 endif

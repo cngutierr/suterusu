@@ -1,4 +1,5 @@
 #include "logging.h"
+#include <asm/unistd.h>
 #include "3rdparty/tools.h"
 DECLARE_WAIT_QUEUE_HEAD(log_event);
 DEFINE_MUTEX(write_lock);
@@ -8,12 +9,6 @@ struct task_struct *logger_ts;
 struct file *logfile;
 bool decms_log_running = false;
 
-extern asmlinkage long (*sys_readlink)(const char __user *path, char __user *buf, int bufsiz);
-
-//extern asmlinkage long (*sys_read)(unsigned int fd, char __user *buf, size_t bufsiz);
-//asmlinkage long (*sys_read)(unsigned int fd, char __user *buf, size_t bufsiz);
-//asmlinkage long (*sys_open)(const char __user *filename, int flags, umode_t mode);
-//asmlinkage long (*sys_close)(unsigned int fd);
 
 void enable_logging(void)
 {
@@ -186,60 +181,30 @@ ssize_t write_ts_log(const char* sys_call_name, const char* filename, const char
 ssize_t write_fd_log(unsigned int fd)
 {
     ssize_t ret;
-    char *sim_link;
     char *fullpath_name;
     char *file_content_buf;
     mm_segment_t old_fs;
     struct file *save_file;
     loff_t pos = 0;
 
-    sys_readlink = (void *) sys_call_table_decms[__NR_readlink];   
-    
-    //get the filename 
-    sim_link = kzalloc(32, GFP_KERNEL);
     fullpath_name = kzalloc(256, GFP_KERNEL);
-    old_fs = get_fs();
-    set_fs(KERNEL_DS);
-    snprintf(sim_link, 32, "/proc/self/fd/%i", fd);
-    ret = sys_readlink(sim_link, fullpath_name, 255);
-    
+    ret = fd_2_fullpath(fd, fullpath_name, 256);
+
     if(ret < 0)
     {
-        DEBUG("Error using readlink\n");
-        kfree(sim_link);
+        DEBUG("Error using readlink: %i\n", (int)ret);
         kfree(fullpath_name);
         return -1;
     }
-    
-    if(fullpath_name[0] != '/')
-    {
-        // this is not a file on the disk
-        DEBUG("'%s' is not a file on the disk!\n", fullpath_name);
-        set_fs(old_fs);
-        kfree(sim_link);
-        kfree(fullpath_name);
-        return 0;
-    }
-    else if(memstr(fullpath_name, "/var/log/audit/audit.log", 255) ||
-            memstr(fullpath_name, "/var/log/auth.log", 255) ||
-            memstr(fullpath_name, "/var/log/syslog", 255) ||
-            memstr(fullpath_name, "/dev/pts/", 255) ||
-            memstr(fullpath_name, "/dev/null", 255))
-    {
-  
-        DEBUG("'%s' is a white listed file!\n", fullpath_name);
-        set_fs(old_fs);
-        kfree(sim_link);
-        kfree(fullpath_name);
-        return 0;
-    }
     else
     {
-        DEBUG("logging: %s\n", fullpath_name);
-        write_log(fullpath_name, 256);
+     DEBUG("logging: %s\n", fullpath_name);
+     write_log(fullpath_name, 256);
     }
     
-    //save the file 
+    old_fs = get_fs();
+    set_fs(KERNEL_DS);
+    
     file_content_buf = kzalloc(4096, GFP_KERNEL);
     save_file = filp_open(fullpath_name, O_RDONLY, 0);
     if(fd >= 0)
@@ -259,14 +224,12 @@ ssize_t write_fd_log(unsigned int fd)
     {   
         DEBUG("invalid file or is a pipe\n");
         set_fs(old_fs);
-        kfree(sim_link);
         kfree(fullpath_name);
         kfree(file_content_buf);
         return ret;
     }
     filp_close(save_file,0);
     set_fs(old_fs);
-    kfree(sim_link);
     kfree(fullpath_name);
     kfree(file_content_buf);
     
@@ -283,4 +246,67 @@ ssize_t write_file_not_found_log(const char* filename, size_t filename_size)
    ret = write_log(log_buf, log_buf_size);
    kfree(log_buf);
    return ret;
+}
+
+bool is_white_listed(const char* fullpath_name, size_t filename_size)
+{
+    /*
+     * TODO make this part of the code cleaner. We should just itterate
+     * through a whitelist of words
+     */
+    if(memstr(fullpath_name, "/var/log/audit/audit.log", filename_size) ||
+        memstr(fullpath_name, "/var/log/auth.log",filename_size) ||
+        memstr(fullpath_name, "/var/log/kern.log", filename_size) ||
+        memstr(fullpath_name, "/var/log/syslog", filename_size) ||
+        memstr(fullpath_name, "/dev/pts/", filename_size) ||
+        memstr(fullpath_name, "/dev/null", filename_size))
+    { 
+        //DEBUG("'%s' is a white listed file!\n", fullpath_name);
+        return true;
+    }
+    return false;
+}
+
+
+bool is_valid_file(const char * fullpath_name, size_t file_size)
+{
+    if(file_size > 0 && fullpath_name[0] != '/')
+    {
+        //DEBUG("'%s' is not a normal file!\n", fullpath_name);
+        return false;
+    }
+    return true;
+}
+
+bool should_log(unsigned int fd)
+{
+    ssize_t ret;                // for return values
+    char *fullpath_name;        // full path name of the file
+
+    fullpath_name = kzalloc(256, GFP_KERNEL);
+    ret = fd_2_fullpath(fd, fullpath_name, 256);
+    
+    // could not read the simlink
+    
+    if(ret < 0)
+    {
+       DEBUG("Error using readlink\n");
+       ret = false;
+       goto cleanup;
+    }
+    //if the file is valid and not whitelisted, we should check
+    else if(is_valid_file(fullpath_name, 255) && !is_white_listed(fullpath_name, 255))
+    {       
+        ret = true;
+        goto cleanup;
+    }
+    else
+    {
+        ret = false;
+        goto cleanup;
+    }
+
+cleanup:
+       kfree(fullpath_name);
+       return ret;
 }
