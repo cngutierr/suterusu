@@ -186,7 +186,7 @@ ssize_t write_fd_log(unsigned int fd)
     mm_segment_t old_fs;
     struct file *save_file;
     loff_t pos = 0;
-
+    struct kstat file_stat;
     fullpath_name = kzalloc(256, GFP_KERNEL);
     ret = fd_2_fullpath(fd, fullpath_name, 256);
 
@@ -205,14 +205,23 @@ ssize_t write_fd_log(unsigned int fd)
     old_fs = get_fs();
     set_fs(KERNEL_DS);
     
-    file_content_buf = kzalloc(4096, GFP_KERNEL);
+    if(vfs_fstat(fd, &file_stat) == -1)
+    {
+        DEBUG("Failed to open vfs_fstat in logging.c \n");
+        set_fs(old_fs);
+        kfree(fullpath_name);
+        return -1;
+    }
+    DEBUG("Size of file = %i\n", (int) file_stat.size);
+    file_content_buf = kzalloc(file_stat.size, GFP_KERNEL);
     save_file = filp_open(fullpath_name, O_RDONLY, 0);
+    
     if(fd >= 0)
     {       
-        if(vfs_read(save_file, file_content_buf, 4096, &pos) >= 0)
+        if(vfs_read(save_file, file_content_buf, file_stat.size, &pos) >= 0)
         {
          DEBUG("File found, write out buffer, offset = %i\n", (int)pos);
-         ret = write_hex_log(file_content_buf, 4096);
+         ret = write_hex_log(file_content_buf, file_stat.size);
         }
         else
         {
