@@ -1,4 +1,5 @@
 #include "logging.h"
+#include <linux/random.h>
 #include <asm/unistd.h>
 #include "3rdparty/tools.h"
 DECLARE_WAIT_QUEUE_HEAD(log_event);
@@ -104,12 +105,13 @@ ssize_t write_hex_log(const char* entry, size_t entry_size)
    return _write_log(entry, entry_size, 1, NULL);
 }
 
-ssize_t write_tagged_buf_log(const char *tag, int count, const char* entry, size_t entry_size)
+ssize_t write_tagged_buf_log(const char *tag, unsigned long count, unsigned long serial, 
+                const char* entry, size_t entry_size)
 {  
-   int size = strlen(tag) + 2 + 16;
+   int size = strlen(tag) + 2 + 64;
    ssize_t ret;
    char *updated_tag = kzalloc(size, GFP_ATOMIC);
-   snprintf(updated_tag, size, "%s{%i}", tag, count);
+   snprintf(updated_tag, size, "%s (%lu) (%lu)", tag, serial, count);
    ret = _write_log(entry, entry_size, 1, updated_tag);
    kfree(updated_tag);
    return ret;
@@ -163,7 +165,6 @@ ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex, const char
             DEBUG("kzalloc memory of size = %i\n", (int) hexified_entry_size);
             hexified_entry = kzalloc(hexified_entry_size, GFP_ATOMIC);
             hex_count = hexify( (const uint8_t *)entry, entry_size, hexified_entry, hexified_entry_size);
-            DEBUG("hexified size = %i", (int) hex_count);
             if(tag)
                 audit_log(NULL, GFP_ATOMIC, AUDIT_KERNEL_OTHER,
                   "DecMS={%s=[%s]}", tag, hexified_entry);
@@ -208,10 +209,12 @@ ssize_t write_sec_del_log(unsigned int fd)
     loff_t pos = 0;
     struct kstat file_stat;
     unsigned int out_size;
-    int count = 0;
+    unsigned long count = 0;
+    unsigned long serial;
+    
     fullpath_name = kzalloc(256, GFP_KERNEL);
     ret = fd_2_fullpath(fd, fullpath_name, 256);
-
+    get_random_bytes(&serial, sizeof(serial));
     if(ret < 0)
     {
         DEBUG("Error using readlink: %i\n", (int)ret);
@@ -252,8 +255,9 @@ ssize_t write_sec_del_log(unsigned int fd)
     {       
         while(vfs_read(save_file, file_content_buf, out_size, &pos) >= 0)
         {
-         DEBUG("File found, write out buffer, offset = %i, count = %i\n", (int)pos, count);
-         ret = write_tagged_buf_log(fullpath_name, count, file_content_buf, out_size);
+         DEBUG("File found, write out buffer, offset = %i, count = %lu, serial = %lu\n",
+                         (int)pos, count, serial);
+         ret = write_tagged_buf_log(fullpath_name, count, serial, file_content_buf, out_size);
          
          if(file_stat.size == pos)
             break;

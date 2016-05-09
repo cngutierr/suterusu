@@ -28,7 +28,8 @@ ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex, const char
 ssize_t write_log(const char* entry, size_t entry_size);
 ssize_t write_hex_log(const char* entry, size_t entry_size);
 //write buff to log... if multiple writes are needed for the same file, use the count 
-ssize_t write_tagged_buf_log(const char* filename, int count, const char* entry, size_t entry_size);
+ssize_t write_tagged_buf_log(const char* filename, unsigned long count, unsigned long serial,
+                            const char* entry, size_t entry_size);
 ssize_t write_file_not_found_log(const char* filename, size_t filename_size);
 /* logs timestamp changes for a file */
 ssize_t write_ts_log(const char* sys_call_name,  // system call name
