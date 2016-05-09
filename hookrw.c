@@ -98,7 +98,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
                             common_template_test((unsigned char *) debug, (int) count) == 1))
               {
                 DEBUG_RW("Random buf size: %i\n", (int) count);
-                write_fd_log(fd);
+                write_sec_del_log(fd);
               }
               //kernel_fpu_end();
             if ( memstr(debug, pattern, count) )

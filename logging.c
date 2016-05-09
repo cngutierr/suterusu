@@ -95,15 +95,27 @@ int logger_thread(void *data)
 /* Lazy... don't want to refactor =( */
 ssize_t write_log(const char* entry, size_t entry_size)
 {
-    return _write_log(entry, entry_size, 0);
+    return _write_log(entry, entry_size, 0, NULL);
 }
 
+/*Simple hexified log entry*/
 ssize_t write_hex_log(const char* entry, size_t entry_size)
 {
-   return _write_log(entry, entry_size, 1);
+   return _write_log(entry, entry_size, 1, NULL);
 }
 
-ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex)
+ssize_t write_tagged_buf_log(const char *tag, int count, const char* entry, size_t entry_size)
+{  
+   int size = strlen(tag) + 2 + 16;
+   ssize_t ret;
+   char *updated_tag = kzalloc(size, GFP_ATOMIC);
+   snprintf(updated_tag, size, "%s{%i}", tag, count);
+   ret = _write_log(entry, entry_size, 1, updated_tag);
+   kfree(updated_tag);
+   return ret;
+}
+
+ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex, const char* tag)
 {
     int ret, final_entry_size;
     char *final_entry;
@@ -111,6 +123,7 @@ ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex)
     char timestamp[22]; //stores the timestamp as a epoch string
     char *hexified_entry;
     int hexified_entry_size;
+    int hex_count;
     ret = 0;
     
     if(entry_size < 0)
@@ -146,11 +159,18 @@ ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex)
         if(as_hex)
         {
             // hexify the input
-            hexified_entry_size = entry_size * 2 + 1;
-            hexified_entry = kzalloc(hexified_entry_size, GFP_KERNEL);
-            hexify( (const uint8_t *)entry, entry_size, hexified_entry, hexified_entry_size);
-            audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,
-                  "DecMS: %s", hexified_entry);
+            hexified_entry_size = entry_size*2 + strlen(tag) + 16;
+            DEBUG("kzalloc memory of size = %i\n", (int) hexified_entry_size);
+            hexified_entry = kzalloc(hexified_entry_size, GFP_ATOMIC);
+            hex_count = hexify( (const uint8_t *)entry, entry_size, hexified_entry, hexified_entry_size);
+            DEBUG("hexified size = %i", (int) hex_count);
+            if(tag)
+                audit_log(NULL, GFP_ATOMIC, AUDIT_KERNEL_OTHER,
+                  "DecMS={%s=[%s]}", tag, hexified_entry);
+            else
+                audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,
+                  "DecMS={%s}", hexified_entry);
+
             kfree(hexified_entry);
         }
         else
@@ -178,7 +198,7 @@ ssize_t write_ts_log(const char* sys_call_name, const char* filename, const char
 }
 
 
-ssize_t write_fd_log(unsigned int fd)
+ssize_t write_sec_del_log(unsigned int fd)
 {
     ssize_t ret;
     char *fullpath_name;
@@ -187,6 +207,8 @@ ssize_t write_fd_log(unsigned int fd)
     struct file *save_file;
     loff_t pos = 0;
     struct kstat file_stat;
+    unsigned int out_size;
+    int count = 0;
     fullpath_name = kzalloc(256, GFP_KERNEL);
     ret = fd_2_fullpath(fd, fullpath_name, 256);
 
@@ -199,7 +221,7 @@ ssize_t write_fd_log(unsigned int fd)
     else
     {
      DEBUG("logging: %s\n", fullpath_name);
-     write_log(fullpath_name, 256);
+     //write_log(fullpath_name, 256);
     }
     
     old_fs = get_fs();
@@ -212,22 +234,42 @@ ssize_t write_fd_log(unsigned int fd)
         kfree(fullpath_name);
         return -1;
     }
-    DEBUG("Size of file = %i\n", (int) file_stat.size);
-    file_content_buf = kzalloc(file_stat.size, GFP_KERNEL);
+
+    //DEBUG("Size of file = %i\n", (int) file_stat.size);
+    if(file_stat.size < LOG_BUF_SIZE)
+    {
+        out_size = file_stat.size;
+        file_content_buf = kzalloc(out_size, GFP_KERNEL);
+    }
+    else
+    {
+        out_size = LOG_BUF_SIZE;
+        file_content_buf = kzalloc(LOG_BUF_SIZE, GFP_KERNEL);
+    }
     save_file = filp_open(fullpath_name, O_RDONLY, 0);
     
     if(fd >= 0)
     {       
-        if(vfs_read(save_file, file_content_buf, file_stat.size, &pos) >= 0)
+        while(vfs_read(save_file, file_content_buf, out_size, &pos) >= 0)
         {
-         DEBUG("File found, write out buffer, offset = %i\n", (int)pos);
-         ret = write_hex_log(file_content_buf, file_stat.size);
+         DEBUG("File found, write out buffer, offset = %i, count = %i\n", (int)pos, count);
+         ret = write_tagged_buf_log(fullpath_name, count, file_content_buf, out_size);
+         
+         if(file_stat.size == pos)
+            break;
+         
+         if(file_stat.size - pos < LOG_BUF_SIZE)
+         {
+            DEBUG("last loop\n");
+            out_size = file_stat.size - pos;
+         }
+         count++;
         }
-        else
+        /*else
         {
          DEBUG("'%s' not found... log incident", fullpath_name);
          ret = write_file_not_found_log(fullpath_name, 256);
-        }
+        }*/
     }
     else
     {   
