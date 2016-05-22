@@ -351,7 +351,7 @@ void log_fd_info(int fd)
     if(vfs_fstat(fd, &file_stat) == -1)
     {
         //bad news
-        DEBUG_HOOK("vfs_fstat failed!\n")
+        DEBUG_HOOK("vfs_fstat failed!\n");
         return;
     }
 

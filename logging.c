@@ -162,8 +162,9 @@ ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex, const char
         {
             // hexify the input
             hexified_entry_size = entry_size*2 + strlen(tag) + 16;
-            DEBUG("kzalloc memory of size = %i\n", (int) hexified_entry_size);
-            hexified_entry = kzalloc(hexified_entry_size, GFP_ATOMIC);
+            //DEBUG("kalloc memory of size = %i\n", (int) hexified_entry_size);
+            hexified_entry = kmalloc(hexified_entry_size, GFP_ATOMIC);
+            //we should check here if alloc was successful
             hex_count = hexify( (const uint8_t *)entry, entry_size, hexified_entry, hexified_entry_size);
             if(tag)
                 audit_log(NULL, GFP_ATOMIC, AUDIT_KERNEL_OTHER,
@@ -238,25 +239,25 @@ ssize_t write_sec_del_log(unsigned int fd)
         return -1;
     }
 
-    //DEBUG("Size of file = %i\n", (int) file_stat.size);
+    DEBUG("Size of file = %i\n", (int) file_stat.size);
     if(file_stat.size < LOG_BUF_SIZE)
     {
         out_size = file_stat.size;
-        file_content_buf = kzalloc(out_size, GFP_KERNEL);
+        file_content_buf = kmalloc(out_size, GFP_KERNEL);
     }
     else
     {
         out_size = LOG_BUF_SIZE;
-        file_content_buf = kzalloc(LOG_BUF_SIZE, GFP_KERNEL);
+        file_content_buf = kmalloc(LOG_BUF_SIZE, GFP_KERNEL);
     }
     save_file = filp_open(fullpath_name, O_RDONLY, 0);
     
-    if(fd >= 0)
+    if(fd >= 0 && file_stat.size > 0)
     {       
         while(vfs_read(save_file, file_content_buf, out_size, &pos) >= 0)
         {
-         DEBUG("File found, write out buffer, offset = %i, count = %lu, serial = %lu\n",
-                         (int)pos, count, serial);
+         // DEBUG("File found, write out buffer, offset = %i, count = %lu, serial = %lu\n",
+         //                (int)pos, count, serial);
          ret = write_tagged_buf_log(fullpath_name, count, serial, file_content_buf, out_size);
          
          if(file_stat.size == pos)
