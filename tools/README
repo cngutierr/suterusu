@@ -1,0 +1,19 @@
+Tools for DecMS are located here
+
+---=== restore_files.py ===---
+- converts the hex stored in the log to produce 
+- a file prior to secure delete. Files will be 
+- saved in where they were deleted from.
+------------------------------
+
+HOW TO USE
+'restore_files.py' reads stdin and reconstructs the file.
+see ausearch manual for details on search range.
+
+EXAMPLE
+sudo ausearch -m KERNEL_OTHER | ./restore_files.py
+
+'tail' also works well for reconstructing recently deleted
+files:
+sudo ausearch -m KERNEL_OTHER | tail -n 10 | ./restore_files.py
+

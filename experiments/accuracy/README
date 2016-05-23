@@ -1,0 +1,3 @@
+Accuracy test copies several known benign files. If the file is random, then raise a flag. 
+
+At the end, see how many known good files are flaged as bad files.

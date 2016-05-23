@@ -21,18 +21,18 @@ void enable_logging(void)
      */
     if(!audit_enabled)
     {
-        DEBUG("'auditd' is not running... use 'dems_logger'");
+        DEBUG_LOG("'auditd' is not running... use 'dems_logger'");
         logfile = filp_open(LOG_FILE_STR, O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
         if(!logfile)
         {
-            DEBUG("Failed to open logfile '%s'\n", LOG_FILE_STR);
+            DEBUG_LOG("Failed to open logfile '%s'\n", LOG_FILE_STR);
         }
         //log_circ_buf.buf = big_bad_buf;
         // init the fifo buf
         ret = kfifo_alloc(&fifo_buf, FIFO_SIZE, GFP_KERNEL);
         if(ret)
         {
-            DEBUG("Error allocating fifo log buff");
+            DEBUG_LOG("Error allocating fifo log buff");
         }
 
         logger_ts = kthread_run(logger_thread, NULL, "decms_logger");
@@ -40,7 +40,7 @@ void enable_logging(void)
     }
     else
     {
-        DEBUG("'auditd' will log events.\n");
+        DEBUG_LOG("'auditd' will log events.\n");
     }
 }
 
@@ -73,20 +73,20 @@ int logger_thread(void *data)
 
         len = kfifo_out(&fifo_buf, log_entry, LOG_ENTRY_SIZE);
         log_entry[len] = '\0';
-            DEBUG("Processing log entry with decms_logger\n");
+            DEBUG_LOG("Processing log entry with decms_logger\n");
             if(logfile)
             {
                 old_fs = get_fs();
                 set_fs(get_ds());
                 ret = vfs_write(logfile, log_entry, len, &pos);
                 set_fs(old_fs);
-                //DEBUG("WROTE A LOG ENTRY: %i %s\n", len, log_entry);
+                //DEBUG_LOG("WROTE A LOG ENTRY: %i %s\n", len, log_entry);
             }
 
         to_log -= 1;
         if(kthread_should_stop() == true)
         {
-            DEBUG("Stopping DecMS logger...\n");
+            DEBUG_LOG("Stopping DecMS logger...\n");
             break;
         }
     }
@@ -162,7 +162,7 @@ ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex, const char
         {
             // hexify the input
             hexified_entry_size = entry_size*2 + strlen(tag) + 16;
-            //DEBUG("kalloc memory of size = %i\n", (int) hexified_entry_size);
+            //DEBUG_LOG("kalloc memory of size = %i\n", (int) hexified_entry_size);
             hexified_entry = kmalloc(hexified_entry_size, GFP_ATOMIC);
             //we should check here if alloc was successful
             hex_count = hexify( (const uint8_t *)entry, entry_size, hexified_entry, hexified_entry_size);
@@ -183,7 +183,7 @@ ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex, const char
     }
     else
     {
-      DEBUG("ERROR LOGGING: auditd and decms_logger not running!!\n");
+      DEBUG_LOG("ERROR LOGGING: auditd and decms_logger not running!!\n");
     }
 
     return ret;
@@ -218,13 +218,13 @@ ssize_t write_sec_del_log(unsigned int fd)
     get_random_bytes(&serial, sizeof(serial));
     if(ret < 0)
     {
-        DEBUG("Error using readlink: %i\n", (int)ret);
+        DEBUG_LOG("Error using readlink: %i\n", (int)ret);
         kfree(fullpath_name);
         return -1;
     }
     else
     {
-     DEBUG("logging: %s\n", fullpath_name);
+     DEBUG_LOG("logging: %s\n", fullpath_name);
      //write_log(fullpath_name, 256);
     }
     
@@ -233,13 +233,13 @@ ssize_t write_sec_del_log(unsigned int fd)
     
     if(vfs_fstat(fd, &file_stat) == -1)
     {
-        DEBUG("Failed to open vfs_fstat in logging.c \n");
+        DEBUG_LOG("Failed to open vfs_fstat in logging.c \n");
         set_fs(old_fs);
         kfree(fullpath_name);
         return -1;
     }
 
-    DEBUG("Size of file = %i\n", (int) file_stat.size);
+    DEBUG_LOG("Size of file = %i\n", (int) file_stat.size);
     if(file_stat.size < LOG_BUF_SIZE)
     {
         out_size = file_stat.size;
@@ -256,7 +256,7 @@ ssize_t write_sec_del_log(unsigned int fd)
     {       
         while(vfs_read(save_file, file_content_buf, out_size, &pos) >= 0)
         {
-         // DEBUG("File found, write out buffer, offset = %i, count = %lu, serial = %lu\n",
+         // DEBUG_LOG("File found, write out buffer, offset = %i, count = %lu, serial = %lu\n",
          //                (int)pos, count, serial);
          ret = write_tagged_buf_log(fullpath_name, count, serial, file_content_buf, out_size);
          
@@ -265,20 +265,20 @@ ssize_t write_sec_del_log(unsigned int fd)
          
          if(file_stat.size - pos < LOG_BUF_SIZE)
          {
-            DEBUG("last loop\n");
+            DEBUG_LOG("last loop\n");
             out_size = file_stat.size - pos;
          }
          count++;
         }
         /*else
         {
-         DEBUG("'%s' not found... log incident", fullpath_name);
+         DEBUG_LOG("'%s' not found... log incident", fullpath_name);
          ret = write_file_not_found_log(fullpath_name, 256);
         }*/
     }
     else
     {   
-        DEBUG("invalid file or is a pipe\n");
+        DEBUG_LOG("invalid file or is a pipe\n");
         set_fs(old_fs);
         kfree(fullpath_name);
         kfree(file_content_buf);
@@ -317,7 +317,7 @@ bool is_white_listed(const char* fullpath_name, size_t filename_size)
         memstr(fullpath_name, "/dev/pts/", filename_size) ||
         memstr(fullpath_name, "/dev/null", filename_size))
     { 
-        //DEBUG("'%s' is a white listed file!\n", fullpath_name);
+        //DEBUG_LOG("'%s' is a white listed file!\n", fullpath_name);
         return true;
     }
     return false;
@@ -328,7 +328,7 @@ bool is_valid_file(const char * fullpath_name, size_t file_size)
 {
     if(file_size > 0 && fullpath_name[0] != '/')
     {
-        //DEBUG("'%s' is not a normal file!\n", fullpath_name);
+        //DEBUG_LOG("'%s' is not a normal file!\n", fullpath_name);
         return false;
     }
     return true;
@@ -346,7 +346,7 @@ bool should_log(unsigned int fd)
     
     if(ret < 0)
     {
-       DEBUG("Error using readlink\n");
+       DEBUG_LOG("Error using readlink\n");
        ret = false;
        goto cleanup;
     }
