@@ -28,17 +28,21 @@ void hook_read ( unsigned int *fd, char __user *buf, size_t *count )
 void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
 {
     void *user_buf;
+    size_t rand_check_buf_size;
+    char *fullpath_name;
     if((unsigned int) current_uid().val < 1000)
         return;
-    if(fd > 2 && fd < DECMS_TAB_MAX && decms_tab[fd] == NEWLY_OPEN)
+    if(count >= BUF_SIZE && fd > 2 && fd < DECMS_TAB_MAX && decms_tab[fd] == NEWLY_OPEN)
     {
-    user_buf = kmalloc(count, GFP_KERNEL);
+    DEBUG_RW("Buff = %i\n", (int) count);
+    rand_check_buf_size = BUF_SIZE;
+    user_buf = kmalloc(rand_check_buf_size, GFP_KERNEL);
     if ( !user_buf)
     {
         DEBUG_RW("ERROR: Failed to allocate %lu bytes for sys_write debugging\n", count);
         return;
     }
-    if( copy_from_user(user_buf, buf, count) )
+    if( copy_from_user(user_buf, buf, rand_check_buf_size) )
     {
         DEBUG_RW("ERROR: Failed to copy %lu bytes from user for sys_write debugging\n", count);
         kfree(user_buf);
@@ -48,10 +52,10 @@ void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
     
     /* Monitor/manipulate sys_write() arguments here */
     //kernel_fpu_begin();
-    if(count > 64 && should_log(fd) && (freq_monobit_test((unsigned char*) user_buf, (int) count) == 1 ||
-                        common_template_test((unsigned char *) user_buf, (int) count) == 1))
+    if(should_log(fd) && (run_rand_check((unsigned char*) user_buf, (int) rand_check_buf_size, MAX_DEPTH) == 1 ||
+                        common_template_test((unsigned char *) user_buf, (int) rand_check_buf_size) == 1))
         {
-         DEBUG_RW("Random buf size: %i, uid=%i\n", (int) count, current_uid().val);
+         DEBUG_RW("Random buf size: %i, uid=%i\n", (int) rand_check_buf_size, current_uid().val);
          decms_tab[fd] = SHOULD_SAVE;
          //write_sec_del_log(fd);
         }
@@ -59,10 +63,24 @@ void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
         decms_tab[fd] = SHOULD_NOT_SAVE;
     kfree(user_buf);
     }
-    //kernel_fpu_end();
-    if(decms_tab[fd] == SHOULD_SAVE)
-        write_sec_del_log(fd);
-
+    //kernel_fpu_end();a
+    
+    //if backup_enabled is false, print out the name of the file that we *should* backup
+    if(BACKUP_ENABLED)
+    {
+        if(decms_tab[fd] == SHOULD_SAVE)
+            write_sec_del_log(fd);
+    }
+    else
+    {   
+        if(decms_tab[fd] == SHOULD_SAVE)
+        {
+            fullpath_name = kzalloc(256, GFP_KERNEL);
+            fd_2_fullpath(fd, fullpath_name, 256);
+            DEBUG("Logging: %s\n", fullpath_name);
+            kfree(fullpath_name);
+        }
+    }
     if(decms_tab[fd] == SHOULD_SAVE && SAVE_SINGLE_PASS)
         decms_tab[fd] = SHOULD_NOT_SAVE;
 }

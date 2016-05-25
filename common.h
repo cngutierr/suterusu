@@ -16,7 +16,12 @@
 #define SHOULD_SAVE     2
 #define SHOULD_NOT_SAVE 3
 
+#define MAX_DEPTH 1
+#define BUF_SIZE 16
+
+
 #define SAVE_SINGLE_PASS 1   //set to 1 if we only save the file once if randmoness is detected
+#define BACKUP_ENABLED 1
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 33)
 #include <generated/autoconf.h>
