@@ -34,34 +34,34 @@ void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
         return;
     if(count >= BUF_SIZE && fd > 2 && fd < DECMS_TAB_MAX && decms_tab[fd] == NEWLY_OPEN)
     {
-    DEBUG_RW("Buff = %i\n", (int) count);
-    rand_check_buf_size = BUF_SIZE;
-    user_buf = kmalloc(rand_check_buf_size, GFP_KERNEL);
-    if ( !user_buf)
-    {
-        DEBUG_RW("ERROR: Failed to allocate %lu bytes for sys_write debugging\n", count);
-        return;
-    }
-    if( copy_from_user(user_buf, buf, rand_check_buf_size) )
-    {
-        DEBUG_RW("ERROR: Failed to copy %lu bytes from user for sys_write debugging\n", count);
-        kfree(user_buf);
-        return;
-    }
-
+        DEBUG_RW("Buff = %i\n", (int) count);
+        rand_check_buf_size = BUF_SIZE;
+        user_buf = kmalloc(rand_check_buf_size, GFP_KERNEL);
+        if ( !user_buf)
+        {
+            DEBUG_RW("ERROR: Failed to allocate %lu bytes for sys_write debugging\n", count);
+            return;
+        }
     
-    /* Monitor/manipulate sys_write() arguments here */
-    //kernel_fpu_begin();
-    if(should_log(fd) && (run_rand_check((unsigned char*) user_buf, (int) rand_check_buf_size, MAX_DEPTH) == 1 ||
+        if( copy_from_user(user_buf, buf, rand_check_buf_size) )
+        {
+            DEBUG_RW("ERROR: Failed to copy %lu bytes from user for sys_write debugging\n", count);
+            kfree(user_buf);
+            return;
+        }
+
+        /* Monitor/manipulate sys_write() arguments here */
+        //kernel_fpu_begin();
+        if(should_log(fd) && (run_rand_check((unsigned char*) user_buf, (int) rand_check_buf_size, MAX_DEPTH) == 1 ||
                         common_template_test((unsigned char *) user_buf, (int) rand_check_buf_size) == 1))
         {
          DEBUG_RW("Random buf size: %i, uid=%i\n", (int) rand_check_buf_size, current_uid().val);
          decms_tab[fd] = SHOULD_SAVE;
          //write_sec_del_log(fd);
         }
-    else
-        decms_tab[fd] = SHOULD_NOT_SAVE;
-    kfree(user_buf);
+        else
+            decms_tab[fd] = SHOULD_NOT_SAVE;
+        kfree(user_buf);
     }
     //kernel_fpu_end();a
     
@@ -181,7 +181,7 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
     #endif*/
 
     //hook_write(&fd, buf, &count);
-    check_secure_delete(fd, buf, count);
+    //check_secure_delete(fd, buf, count);
 
     hijack_pause(sys_write);
     ret = sys_write(fd, buf, count);
