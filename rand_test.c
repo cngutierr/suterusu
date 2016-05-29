@@ -105,12 +105,12 @@ void D4_B4096_test(D4_B4096* D4B4096_results, unsigned char *buf, unsigned int b
     unsigned int num_blocks = buf_size / block_size;
     unsigned int i;
     float pi, chi_sq;
-    union Number tmp;
+    union Number tmp, tmp2;
     float s_obs;
     int monobit_sum = 0;
     //pre-test
     float pi_runs = 0.0;
-    unsigned int run_sum = 0.0;  
+    unsigned int run_sum = 0;  
        
     for(i = 0; i < num_blocks; i++)
     {
@@ -121,8 +121,7 @@ void D4_B4096_test(D4_B4096* D4B4096_results, unsigned char *buf, unsigned int b
         pi = ((float) block_sum / ((float)block_size * BYTE_SIZE)) - 0.5;
         sum += pi*pi;
         //runs stuff
-        pi_runs += ((float) ones_count(&buf[i*block_size], block_size)) / ((float) block_size * BYTE_SIZE);
-        run_sum += run_count(&buf[i*block_size], block_size);
+        pi_runs += (float) ones_count(&buf[i*block_size], block_size);
     }
     //monobit stuff
     s_obs = (monobit_sum < 0 ? -1 * monobit_sum : monobit_sum ) / SQRT4096;
@@ -135,16 +134,25 @@ void D4_B4096_test(D4_B4096* D4B4096_results, unsigned char *buf, unsigned int b
     D4B4096_results->block_freq = tmp.f;
     
     //runs stuff
-    pi_runs -= 0.5;
-    pi_runs = pi_runs < 0 ? -1.0 * pi_runs: pi_runs;
-    if((pi_runs - 0.5) > (2.0 / no_math_sqrt(buf_size * BYTE_SIZE)))
+    pi_runs = pi_runs / ((float) buf_size * BYTE_SIZE);
+ 
+    if( ((pi_runs - 0.5) < 0 ? -1.0 * (pi_runs -0.5): pi_runs) > 0.011048)
         D4B4096_results->runs =  0.0;
     else
     {
-        tmp.f = run_sum - 2 * buf_size * BYTE_SIZE * pi_runs *(1-pi_runs);
+        run_sum = run_count(buf, buf_size);
+        DEBUG_RAND_TEST("Made it pass the first test\n");
+        DEBUG_RAND_TEST("run sum: %lu\n", run_sum);
+        tmp.f = pi_runs;
+        DEBUG_RAND_TEST("pi run: %x\n", tmp.i);
+        tmp.f = run_sum - 2.0 * buf_size * BYTE_SIZE * pi_runs *(1.0 - pi_runs);
+        DEBUG_RAND_TEST("tmp1: %x\n", tmp.i);
         tmp.f = tmp.f < 0.0 ? tmp.f * -1.0: tmp.f;
-        tmp.i =  no_math_erfc(tmp.f);
-        D4B4096_results->runs  = tmp.f / (2*pi_runs*(1-pi_runs)*256.0);
+        DEBUG_RAND_TEST("tmp2: %x\n", tmp.i);
+        tmp2.f = (2.0 *pi_runs * (1.0 - pi_runs) * 256.0);
+        DEBUG_RAND_TEST("tmp3: %x\n", tmp2.i);
+        tmp.i = no_math_erfc(tmp.f / (2.0*pi_runs*(1.0-pi_runs)*256.0));
+        D4B4096_results->runs  = tmp.f;
     }  
 }
 
@@ -242,8 +250,8 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth)
     else if(max_depth == 2 && len == 4096)
     {   
         D2_B4096_test(&D2B4096_results, buf, len, 41);
-        DEBUG_RAND_TEST("monobit=%x\n", D2B4096_results.monobit_freq);
-        DEBUG_RAND_TEST("freqblock=%x\n", D2B4096_results.monobit_freq);
+        DEBUG_RAND_TEST("monobit=%x\n", &D2B4096_results.monobit_freq);
+        DEBUG_RAND_TEST("freqblock=%x\n", &D2B4096_results.block_freq);
         
         //classification portion
        if(D2B4096_results.block_freq <= 0.0023)
@@ -261,16 +269,22 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth)
             return 1;
        }
     }
-    if(max_depth == 1 && len == 16)
+    else if(max_depth == 1 && len == 16)
     {
         tmp.i = freq_monobit_test(buf, len);
         DEBUG_RAND_TEST("monobit_freq=%x\n", tmp.i);
         return tmp.f <= 0.1866 ? 0 : 1;
     }
-    if(max_depth == 4 && len == 4096)
+    else if(max_depth == 4 && len == 4096)
     {
         D4_B4096_test(&D4B4096_results, buf, len, 41);
-        if(D4B4096_results.block_freq <= 0.0024)
+        tmp.f = D4B4096_results.monobit_freq;
+        DEBUG_RAND_TEST("monobit_freq=%x\n", tmp.i);
+        tmp.f = D4B4096_results.block_freq;
+        DEBUG_RAND_TEST("block_freq=%x\n", tmp.i);
+        tmp.f = D4B4096_results.runs;
+        DEBUG_RAND_TEST("runs=%x\n", tmp.i);
+        if(D4B4096_results.block_freq <= 0.0023)
         {
             //left branch
             if(D4B4096_results.monobit_freq <= 0.9603)
@@ -279,7 +293,7 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth)
                     return 0;
                 else
                 {
-                    if(D4B4096_results.runs <= 0.0002)
+                    if(D4B4096_results.block_freq <= 0.0002)
                         return 0;
                     else
                         return 1;
@@ -290,7 +304,7 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth)
         }
         else
         {
-            if(D4B4096_results.runs <= 0.009)
+            if(D4B4096_results.runs <= 0.0009)
                 return 0;
             else
             {
