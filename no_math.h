@@ -50,6 +50,10 @@ extern float IGAMC_512[];
 
 #define IGAMC_4096_STEP  0.125
 extern float IGAMC_4096[];
+
+#define IGAMC_3_STEP 0.01
+extern float IGAMC_3[];
+
 /*
  * Func prototypes for no_math lib
  */

@@ -3,7 +3,21 @@
 #include "no_math.h"
 #include "common.h"
 #define BYTE_SIZE 8
+typedef struct BlockConsts
+{
+    unsigned int size;
+    unsigned int K;
+    unsigned int N;
+    unsigned int V[6];
+    float pi[6];
+} BlockConsts;
 
+static const BlockConsts small_block_consts =  {4, 3, 16, {1, 2, 3, 4},
+                                            {0.2148, 0.3672, 0.2305, 0.1875}};
+static const BlockConsts medium_block_consts = {6, 5, 49, {4, 5, 6, 7, 8, 9},
+                                            {0.1174, 0.2430, 0.2493, 0.1752, 0.1027, 0.1124}};
+static const BlockConsts large_block_consts =  {6, 5, 49, {6, 7, 8, 9, 10, 11},
+                                            {0.1170, 0.2460, 0.2523, 0.1755, 0.1027, 0.1124}};
 extern int ratio[];
 /*
  *Helper structs for classification tree
@@ -22,6 +36,14 @@ typedef struct D4_B4096
     float monobit_freq;
     float runs;
 }D4_B4096;
+
+typedef struct D3_B4096
+{
+    float block_freq;
+    float monobit_freq;
+    float runs;
+    float one_runs;
+}D3_B4096;
 /*
  * Helper functions
  */
@@ -71,4 +93,11 @@ void D2_B4096_test(D2_B4096* results, unsigned char *buf,
 
 void D4_B4096_test(D4_B4096* results, unsigned char *buf,
                    unsigned int buf_size, unsigned int block_size);
+
+void D3_B4096_test(D3_B4096* D3B4096_results, unsigned char *buf, 
+                   unsigned int buf_size, unsigned int block_size);
+
+unsigned int longest_one_run(unsigned char* buf, unsigned int buf_size);
+unsigned int get_v_bucket(unsigned int ones_run, const BlockConsts* block_consts);
+
 #endif

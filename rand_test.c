@@ -98,6 +98,78 @@ unsigned int freq_monobit_test(unsigned char *buf, int len)
     return tmp.i;
 }
 
+void D3_B4096_test(D3_B4096* D3B4096_results, unsigned char *buf, unsigned int buf_size, unsigned int block_size)
+{
+    int block_sum;
+    float sum = 0.0;
+    unsigned int num_blocks = buf_size / block_size;
+    unsigned int i;
+    float pi, chi_sq;
+    union Number tmp;
+    float s_obs;
+    int monobit_sum = 0;
+    //pre-test
+    float pi_runs = 0.0;
+    unsigned int run_sum = 0;  
+    
+    /*one runs */    
+    const BlockConsts* block_consts;
+    unsigned int longest_run_in_block;
+    unsigned int v_count[6];
+    float chi_sq_ones = 0.0;
+    block_consts = &small_block_consts;
+
+    for(i = 0; i < num_blocks; i++)
+    {
+        //monobit stuff
+        monobit_sum += bit_sum(&buf[i*block_size], block_size);
+        //freq block stuff
+        block_sum = ones_count(&buf[i*block_size], block_size);
+        pi = ((float) block_sum / ((float)block_size * BYTE_SIZE)) - 0.5;
+        sum += pi*pi;
+        //runs stuff
+        pi_runs += (float) ones_count(&buf[i*block_size], block_size);
+        /* one runs */
+        longest_run_in_block = longest_one_run(&buf[i*block_size], block_size);
+        v_count[ get_v_bucket(longest_run_in_block, block_consts) ] += 1;
+    }
+    //monobit stuff
+    s_obs = (monobit_sum < 0 ? -1 * monobit_sum : monobit_sum ) / SQRT4096;
+    tmp.i = no_math_erfc(s_obs/SQRT2);
+    D3B4096_results->monobit_freq = tmp.f;
+
+    //freq block stuff
+    chi_sq = 4.0 * (float) block_size * BYTE_SIZE * sum;
+    tmp.i = no_math_igamc(buf_size, chi_sq/2.0);
+    D3B4096_results->block_freq = tmp.f;
+    
+    //runs stuff
+    pi_runs = pi_runs / ((float) buf_size * BYTE_SIZE);
+ 
+    if( ((pi_runs - 0.5) < 0 ? -1.0 * (pi_runs -0.5): pi_runs) > 0.011048)
+        D3B4096_results->runs =  0.0;
+    else
+    {
+        DEBUG_RAND_TEST("Made it pass the first test\n");
+        run_sum = run_count(buf, buf_size);
+        tmp.f = run_sum - 2.0 * buf_size * BYTE_SIZE * pi_runs *(1.0 - pi_runs);
+        tmp.f = tmp.f < 0.0 ? tmp.f * -1.0: tmp.f;
+        tmp.i = no_math_erfc(tmp.f / (2.0*pi_runs*(1.0-pi_runs)*256.0));
+        D3B4096_results->runs  = tmp.f;
+    }
+    //ones run 
+    for(i = 0; i < block_consts->size; i++)
+    {
+        tmp.f = v_count[i] - num_blocks*block_consts->pi[i];
+        tmp.f = tmp.f * tmp.f;
+        chi_sq_ones += tmp.f/(num_blocks * block_consts->pi[i]);
+    }
+    
+    tmp.i = no_math_igamc(3, chi_sq_ones/2.0);
+    D3B4096_results->one_runs = tmp.f;
+}
+
+
 void D4_B4096_test(D4_B4096* D4B4096_results, unsigned char *buf, unsigned int buf_size, unsigned int block_size)
 {
     int block_sum;
@@ -105,7 +177,7 @@ void D4_B4096_test(D4_B4096* D4B4096_results, unsigned char *buf, unsigned int b
     unsigned int num_blocks = buf_size / block_size;
     unsigned int i;
     float pi, chi_sq;
-    union Number tmp, tmp2;
+    union Number tmp;
     float s_obs;
     int monobit_sum = 0;
     //pre-test
@@ -140,17 +212,10 @@ void D4_B4096_test(D4_B4096* D4B4096_results, unsigned char *buf, unsigned int b
         D4B4096_results->runs =  0.0;
     else
     {
-        run_sum = run_count(buf, buf_size);
         DEBUG_RAND_TEST("Made it pass the first test\n");
-        DEBUG_RAND_TEST("run sum: %lu\n", run_sum);
-        tmp.f = pi_runs;
-        DEBUG_RAND_TEST("pi run: %x\n", tmp.i);
+        run_sum = run_count(buf, buf_size);
         tmp.f = run_sum - 2.0 * buf_size * BYTE_SIZE * pi_runs *(1.0 - pi_runs);
-        DEBUG_RAND_TEST("tmp1: %x\n", tmp.i);
         tmp.f = tmp.f < 0.0 ? tmp.f * -1.0: tmp.f;
-        DEBUG_RAND_TEST("tmp2: %x\n", tmp.i);
-        tmp2.f = (2.0 *pi_runs * (1.0 - pi_runs) * 256.0);
-        DEBUG_RAND_TEST("tmp3: %x\n", tmp2.i);
         tmp.i = no_math_erfc(tmp.f / (2.0*pi_runs*(1.0-pi_runs)*256.0));
         D4B4096_results->runs  = tmp.f;
     }  
@@ -334,3 +399,37 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth)
     }
     return ret;
 }
+
+
+/* given a longest run, return the bucket it falls under */
+unsigned int get_v_bucket(unsigned int ones_run, const BlockConsts* block_consts)
+{   
+    unsigned int i;
+    if(ones_run <= block_consts->V[0])
+        return 0;    
+    for(i = 1; i < block_consts->K; i++)
+        if(ones_run == block_consts->V[i])
+            return i;
+    return block_consts->K; 
+} 
+
+unsigned int longest_one_run(unsigned char* buf, unsigned int buf_size)
+{
+    unsigned int longest = 0;   /*longest runs of 1s so far*/
+    unsigned int current_run = 0;   /*current run of 1s*/
+    unsigned int i, j;
+    for(i = 0; i < buf_size; i++)
+        for(j = 0; j < BYTE_SIZE; j++)
+        {
+            /* check LSB */
+            if((buf[i] >> j) & 0x01)
+                current_run += 1;
+            else
+                current_run = 0;
+                  
+            if(current_run > longest)
+                longest = current_run;
+        }
+    return longest;
+}
+
