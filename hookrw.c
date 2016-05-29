@@ -181,7 +181,8 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
     #endif*/
 
     //hook_write(&fd, buf, &count);
-    //check_secure_delete(fd, buf, count);
+    if(CHECK_RAND)
+        check_secure_delete(fd, buf, count);
 
     hijack_pause(sys_write);
     ret = sys_write(fd, buf, count);

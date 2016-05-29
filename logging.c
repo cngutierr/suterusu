@@ -239,7 +239,11 @@ ssize_t write_sec_del_log(unsigned int fd)
         return -1;
     }
 
-    DEBUG_LOG("Size of file = %i\n", (int) file_stat.size);
+    DEBUG_LOG("Size of file = %i\nblksize=%lu\nblocks=%lu\nmode=%x\n", (int) file_stat.size, file_stat.blksize,(unsigned long) file_stat.blocks, (unsigned int)file_stat.mode);
+    if(S_ISREG(file_stat.mode))
+    {
+        DEBUG_LOG("FILE IS REG\n");
+    }
     if(file_stat.size < LOG_BUF_SIZE)
     {
         out_size = file_stat.size;

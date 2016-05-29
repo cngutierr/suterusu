@@ -16,12 +16,26 @@
 #define SHOULD_SAVE     2
 #define SHOULD_NOT_SAVE 3
 
-#define MAX_DEPTH 1
+//Current, we only support the following combos:
+//1.  MAX_DEPTH 1
+//    BUF_SIZE 4096
+//
+//2.  MAX_DEPTH 2
+//    BUF_SIZE 4096
+//
+//3.  MAX_DEPTH 1
+//    BUF_SIZE 16
+//
+#define MAX_DEPTH 4
 #define BUF_SIZE 4096
 
+//set the following false if we want to test
+//the latency of DecMS without accounting for
+//the randomness checks
+#define CHECK_RAND 1
 
 #define SAVE_SINGLE_PASS 1   //set to 1 if we only save the file once if randmoness is detected
-#define BACKUP_ENABLED 0
+#define BACKUP_ENABLED 1
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 33)
 #include <generated/autoconf.h>
@@ -33,11 +47,11 @@
 #define __DEBUG__ 1             // General debugging statements
 #define __DEBUG_HOOK__ 0        // Debugging of inline function hooking
 #define __DEBUG_KEY__ 0         // Debugging of user keypresses
-#define __DEBUG_RW__ 0          // Debugging of sys_read and sys_write hooks
+#define __DEBUG_RW__ 1          // Debugging of sys_read and sys_write hooks
 #define __DEBUG_TS__ 0          // Debugging of sys_read and sys_write hooks
-#define __DEBUG_NO_MATH__ 0     // Debugging of no_math libraries
-#define __DEBUG_RAND_TEST__ 0   // Debugging of rand_test libraries
-#define __DEBUG_LOG__  0        // Debug messages for log file
+#define __DEBUG_NO_MATH__ 1     // Debugging of no_math libraries
+#define __DEBUG_RAND_TEST__ 1   // Debugging of rand_test libraries
+#define __DEBUG_LOG__  1        // Debug messages for log file
 
 #if __DEBUG__
 # define DEBUG(fmt, ...) printk(fmt, ##__VA_ARGS__)

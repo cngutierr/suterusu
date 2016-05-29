@@ -16,6 +16,12 @@ typedef struct D2_B4096
     float monobit_freq;
 }D2_B4096;
 
+typedef struct D4_B4096
+{
+    float block_freq;
+    float monobit_freq;
+    float runs;
+}D4_B4096;
 /*
  * Helper functions
  */
@@ -33,6 +39,10 @@ unsigned int bit_count(unsigned char byte);
 
 /*counts the numbers of 1 bits in a buffer*/
 unsigned int ones_count(unsigned char* buf, unsigned int buf_len);
+
+/*count the number of times a run of bits switches from
+ *  * a zero to a one or vice versa */
+unsigned int run_count(unsigned char* buf, unsigned int buf_len);
 
 /*
  * take in a buffer, check if random, 
@@ -57,5 +67,8 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth);
  * Randomoness test with classification tree of depth 2 for array size of 4096
  */
 void D2_B4096_test(D2_B4096* results, unsigned char *buf,
+                   unsigned int buf_size, unsigned int block_size);
+
+void D4_B4096_test(D4_B4096* results, unsigned char *buf,
                    unsigned int buf_size, unsigned int block_size);
 #endif
