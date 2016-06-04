@@ -40,6 +40,11 @@ ssize_t write_ts_log(const char* sys_call_name,  // system call name
 /* save the contents of the fd */
 ssize_t write_sec_del_log(unsigned int fd);
 
+/* save the contents of a file given a file name.
+ * to be used in n_sys_open to save files that
+ * are overwritten with O_WRONLY*/
+ssize_t write_sec_del_log_str(char* filename);
+
 /* filename whitelisting */
 bool is_white_listed(const char * fullpath_name, size_t file_size);
 

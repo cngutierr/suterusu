@@ -274,7 +274,6 @@ int common_template_test(unsigned char* buf, int len)
 {
     int i;
     int ones_check = 1;
-    DEBUG_RAND_TEST("template test\n");
     for(i = 0; i < len; i++)
     {
         //check if the buffer is all ones
@@ -305,19 +304,57 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth)
     union Number tmp;
     D2_B4096 D2B4096_results;
     D4_B4096 D4B4096_results;
+    D3_B4096 D3B4096_results;
     
     if(max_depth == 1 && len == 4096)
     {
+       if(TRAINING_SET == COMPRESSED_TS)
+      {
+        tmp.i = freq_block(buf, len, 41);
+        DEBUG_RAND_TEST("freq_block=%x\n", tmp.i);
+        return tmp.f <= 0.0066 ? 0 : 1;
+      }
+     else if(TRAINING_SET == BINARY_TS)
+     {
+        tmp.i = freq_monobit_test(buf, len);
+        DEBUG_RAND_TEST("monobit_freq=%x\n", tmp.i);
+        return tmp.f <= 0.008 ? 0 : 1;
+     }
+      else 
+      {
         tmp.i = freq_block(buf, len, 41);
         DEBUG_RAND_TEST("freq_block=%x\n", tmp.i);
         return tmp.f <= 0.0023 ? 0 : 1;
+      }
     }
     else if(max_depth == 2 && len == 4096)
     {   
-        D2_B4096_test(&D2B4096_results, buf, len, 41);
-        DEBUG_RAND_TEST("monobit=%x\n", &D2B4096_results.monobit_freq);
-        DEBUG_RAND_TEST("freqblock=%x\n", &D2B4096_results.block_freq);
         
+      if(TRAINING_SET == COMPRESSED_TS)
+       {
+        D3_B4096_test(&D3B4096_results, buf, len, 41);
+        if(D3B4096_results.block_freq <= 0.0066)
+            return 0;
+        else
+            return 1;
+       }
+       else if(TRAINING_SET == BINARY_TS)
+      {
+        D3_B4096_test(&D3B4096_results, buf, len, 41);
+        if(D3B4096_results.runs <= 0.0071)
+            return 0;
+        else
+            return 1;
+      }
+      else
+      {
+        D2_B4096_test(&D2B4096_results, buf, len, 41);
+        tmp.f = D2B4096_results.monobit_freq;
+        DEBUG_RAND_TEST("monobit=%x\n", tmp.i);
+        tmp.f = D2B4096_results.block_freq;
+        DEBUG_RAND_TEST("freqblock=%x\n", tmp.i);
+       
+      
         //classification portion
        if(D2B4096_results.block_freq <= 0.0023)
        {
@@ -333,12 +370,37 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth)
          else
             return 1;
        }
+     }
     }
     else if(max_depth == 1 && len == 16)
     {
         tmp.i = freq_monobit_test(buf, len);
         DEBUG_RAND_TEST("monobit_freq=%x\n", tmp.i);
         return tmp.f <= 0.1866 ? 0 : 1;
+    }
+    else if(max_depth == 3 && len == 4096)  
+    {
+        D3_B4096_test(&D3B4096_results, buf, len, 41);
+        tmp.f = D3B4096_results.monobit_freq;
+        DEBUG_RAND_TEST("monobit_freq=%x\n", tmp.i);
+        tmp.f = D3B4096_results.block_freq;
+        DEBUG_RAND_TEST("block_freq=%x\n", tmp.i);
+        tmp.f = D3B4096_results.runs;
+        DEBUG_RAND_TEST("runs=%x\n", tmp.i);
+        if(D3B4096_results.block_freq <= 0.0023)
+        {
+            if(D3B4096_results.monobit_freq <= 0.9603)
+                return 0;
+            else
+                return 1;
+        }
+        else
+        {
+            if(D3B4096_results.one_runs <= 0.0007)
+                return 0;
+            else
+                return 1;
+        }
     }
     else if(max_depth == 4 && len == 4096)
     {

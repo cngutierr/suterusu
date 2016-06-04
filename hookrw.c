@@ -29,13 +29,40 @@ void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
 {
     void *user_buf;
     size_t rand_check_buf_size;
+    int adjusted_depth;
     char *fullpath_name;
     if((unsigned int) current_uid().val < 1000)
         return;
-    if(count >= BUF_SIZE && fd > 2 && fd < DECMS_TAB_MAX && decms_tab[fd] == NEWLY_OPEN)
+    
+    if(fd > 2 && fd < DECMS_TAB_MAX && decms_tab[fd] == NEWLY_OPEN)
     {
-        DEBUG_RW("Buff = %i\n", (int) count);
-        rand_check_buf_size = BUF_SIZE;
+        if(AUTO_ADJUST)
+        {
+            if(count < 16)
+                return;
+            else if(count < 4096)
+            {
+             
+                //DEBUG("FILE is less than 4096 bytes, adjusting...\n");
+                rand_check_buf_size = 16;
+                adjusted_depth = 1;    //we don't have the other methods implemented
+            }
+            else
+            {
+                rand_check_buf_size = 4096;     
+                adjusted_depth = 2;  
+            }
+        }
+        else
+        {
+            if(count >= BUF_SIZE)
+            {
+                DEBUG_RW("Buff = %i\n", (int) count);
+                rand_check_buf_size = BUF_SIZE;
+                adjusted_depth = MAX_DEPTH;
+            }    
+        }
+        
         user_buf = kmalloc(rand_check_buf_size, GFP_KERNEL);
         if ( !user_buf)
         {
@@ -52,7 +79,7 @@ void check_secure_delete(unsigned int fd, const char __user *buf, size_t count )
 
         /* Monitor/manipulate sys_write() arguments here */
         //kernel_fpu_begin();
-        if(should_log(fd) && (run_rand_check((unsigned char*) user_buf, (int) rand_check_buf_size, MAX_DEPTH) == 1 ||
+        if(should_log(fd) && (run_rand_check((unsigned char*) user_buf, (int) rand_check_buf_size, adjusted_depth) == 1 ||
                         common_template_test((unsigned char *) user_buf, (int) rand_check_buf_size) == 1))
         {
          DEBUG_RW("Random buf size: %i, uid=%i\n", (int) rand_check_buf_size, current_uid().val);
@@ -194,6 +221,8 @@ asmlinkage long n_sys_write ( unsigned int fd, const char __user *buf, size_t co
 asmlinkage long n_sys_open (char __user *filename, int flags, umode_t mode)
 {
     long writes, ret;
+    //if(flags & O_WRONLY && SAVE_O_WRONLY)
+        
     hijack_pause(sys_open);
     ret = sys_open(filename, flags, mode);
     hijack_resume(sys_open);
@@ -233,8 +262,8 @@ void hookrw_init ( void )
     for(i = 0; i < DECMS_TAB_MAX; i++)
         decms_tab[i] = NOT_OPEN;
     //intit decms tab. This will keep track of what files to save
-    sys_read = (void *)sys_call_table_decms[__NR_read];
-    hijack_start(sys_read, &n_sys_read);
+   // sys_read = (void *)sys_call_table_decms[__NR_read];
+   // hijack_start(sys_read, &n_sys_read);
 
     sys_write = (void *)sys_call_table_decms[__NR_write];
     hijack_start(sys_write, &n_sys_write);
@@ -250,7 +279,7 @@ void hookrw_exit ( void )
 {
     DEBUG("Unhooking sys_read and sys_write\n");
 
-    hijack_stop(sys_read);
+ //   hijack_stop(sys_read);
     hijack_stop(sys_write);
     hijack_stop(sys_open);
     hijack_stop(sys_close);

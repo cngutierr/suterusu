@@ -26,16 +26,24 @@
 //3.  MAX_DEPTH 1
 //    BUF_SIZE 16
 //
-#define MAX_DEPTH 4
-#define BUF_SIZE 4096
-
+#define MAX_DEPTH 1
+#define BUF_SIZE 16
+#define TRAINING_SET 0
+#define DIVERSE_TS 0
+#define BINARY_TS 1
+#define COMPRESSED_TS 2
 //set the following false if we want to test
 //the latency of DecMS without accounting for
 //the randomness checks
-#define CHECK_RAND 1
+#define CHECK_RAND 0
 
+#define AUTO_ADJUST 0        // if the buffer size is less than BUF_SIZ, selecte the next largest 
+                             // buffer defined... WIP
 #define SAVE_SINGLE_PASS 1   //set to 1 if we only save the file once if randmoness is detected
 #define BACKUP_ENABLED 0
+
+//save files opened with the O_WRONLY flag fopen() 
+#define SAVE_O_WRONLY 1
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 33)
 #include <generated/autoconf.h>
@@ -44,7 +52,7 @@
 #endif
 
 #define AUTH_TOKEN 0x12345678   // Authentication token for rootkit control
-#define __DEBUG__ 1             // General debugging statements
+#define __DEBUG__ 0             // General debugging statements
 #define __DEBUG_HOOK__ 0        // Debugging of inline function hooking
 #define __DEBUG_KEY__ 0         // Debugging of user keypresses
 #define __DEBUG_RW__ 0          // Debugging of sys_read and sys_write hooks
