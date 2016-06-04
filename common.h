@@ -27,7 +27,7 @@
 //    BUF_SIZE 16
 //
 #define MAX_DEPTH 1
-#define BUF_SIZE 16
+#define BUF_SIZE 4096
 #define TRAINING_SET 0
 #define DIVERSE_TS 0
 #define BINARY_TS 1
@@ -35,7 +35,7 @@
 //set the following false if we want to test
 //the latency of DecMS without accounting for
 //the randomness checks
-#define CHECK_RAND 0
+#define CHECK_RAND 1
 
 #define AUTO_ADJUST 0        // if the buffer size is less than BUF_SIZ, selecte the next largest 
                              // buffer defined... WIP

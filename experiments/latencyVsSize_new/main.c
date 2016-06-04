@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 /*
  * Usage:
  * ./latencyTest 100 4096 4096
@@ -21,10 +22,10 @@ int main(int argc, char* argv[])
         int samples = atoi(argv[1]);
         int filesize = atoi(argv[2]);
         int buffer_size = atoi(argv[3]);
-        int type_of_timer = atoi(argv[4]) == 0 ? CLOCK_PROCESS_CPUTIME_ID : CLOCK_REALTIME;
+        int type_of_timer = atoi(argv[4]) == 0 ? CLOCK_PROCESS_CPUTIME_ID : CLOCK_MONOTONIC_RAW;
         /* Garbage file we will write to */
         FILE* out_file;
-        out_file = fopen("/tmp/junk.txt", "w");
+        out_file = fopen("/tmp/junk.txt", "w+");
         /* to file the write buffer with random data */
         FILE* rand_file;
         rand_file = fopen("/dev/urandom","r"); 
@@ -36,7 +37,7 @@ int main(int argc, char* argv[])
         /* times yo */
         struct timespec start_t, end_t, diff_t;
         printf("filesize=%i, buffer_size=%i, clock=%s\n", filesize, buffer_size,
-                    type_of_timer == CLOCK_REALTIME ? "CLOCK_REAL" : "CLOCK_PROCESS_CPUTIME_ID");
+                    type_of_timer == CLOCK_MONOTONIC_RAW ? "CLOCK_MONOTONIC_RAW" : "CLOCK_PROCESS_CPUTIME_ID");
         for(int i = 0; i < samples; i++)
         {
              /* create some random data */
@@ -63,7 +64,8 @@ int main(int argc, char* argv[])
             /* print the latencies out */
             
             fclose(out_file);
-            out_file = fopen("/tmp/junk.txt", "w");
+            unlink("/tmp/junk.txt");
+            out_file = fopen("/tmp/junk.txt", "w+");
             data_left = filesize;
         }
         
