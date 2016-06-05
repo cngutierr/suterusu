@@ -52,13 +52,13 @@
 #endif
 
 #define AUTH_TOKEN 0x12345678   // Authentication token for rootkit control
-#define __DEBUG__ 0             // General debugging statements
+#define __DEBUG__ 1             // General debugging statements
 #define __DEBUG_HOOK__ 0        // Debugging of inline function hooking
 #define __DEBUG_KEY__ 0         // Debugging of user keypresses
 #define __DEBUG_RW__ 0          // Debugging of sys_read and sys_write hooks
 #define __DEBUG_TS__ 0          // Debugging of sys_read and sys_write hooks
 #define __DEBUG_NO_MATH__ 0     // Debugging of no_math libraries
-#define __DEBUG_RAND_TEST__ 0   // Debugging of rand_test libraries
+#define __DEBUG_RAND_TEST__ 1   // Debugging of rand_test libraries
 #define __DEBUG_LOG__  0        // Debug messages for log file
 
 #if __DEBUG__

@@ -320,12 +320,12 @@ int run_rand_check(unsigned char* buf, int len, const int max_depth)
         DEBUG_RAND_TEST("monobit_freq=%x\n", tmp.i);
         return tmp.f <= 0.008 ? 0 : 1;
      }
-      else 
-      {
+     else 
+     {
         tmp.i = freq_block(buf, len, 41);
         DEBUG_RAND_TEST("freq_block=%x\n", tmp.i);
         return tmp.f <= 0.0023 ? 0 : 1;
-      }
+     }
     }
     else if(max_depth == 2 && len == 4096)
     {   
