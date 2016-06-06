@@ -99,12 +99,42 @@ ssize_t write_log(const char* entry, size_t entry_size)
     return _write_log(entry, entry_size, 0, NULL);
 }
 
+struct hex_log_data
+{
+    size_t entry_size;
+    const char* entry;
+};
+
 /*Simple hexified log entry*/
 ssize_t write_hex_log(const char* entry, size_t entry_size)
 {
-   return _write_log(entry, entry_size, 1, NULL);
+   if(THREAD_LOGGING)
+   {
+     /* create the structure that will hold the pointer
+      * and size of the log data.
+      */
+      struct hex_log_data data;
+      data.entry_size = entry_size;
+      data.entry = entry;
+      kthread_run(auditd_thread_logging, &data, "audit_logger");
+      return 0;
+    }    
+   else
+   {    
+    return _write_log(entry, entry_size, 1, NULL);
+   }
 }
 
+int auditd_thread_logging(void* in_data)
+{
+    /*
+     * parse the input data, call _write_log, then exit
+     */
+    struct hex_log_data* data = (struct hex_log_data *) in_data;
+    _write_log(data->entry, data->entry_size, 1, NULL);
+    //do_exit(0);
+    return 0;
+}
 ssize_t write_tagged_buf_log(const char *tag, unsigned long count, unsigned long serial, 
                 const char* entry, size_t entry_size)
 {  
@@ -163,11 +193,11 @@ ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex, const char
             // hexify the input
             hexified_entry_size = entry_size*2 + strlen(tag) + 16;
             //DEBUG_LOG("kalloc memory of size = %i\n", (int) hexified_entry_size);
-            hexified_entry = kmalloc(hexified_entry_size, GFP_ATOMIC);
+            hexified_entry = kmalloc(hexified_entry_size, GFP_KERNEL);
             //we should check here if alloc was successful
             hex_count = hexify( (const uint8_t *)entry, entry_size, hexified_entry, hexified_entry_size);
             if(tag)
-                audit_log(NULL, GFP_ATOMIC, AUDIT_KERNEL_OTHER,
+                audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,
                   "DecMS={%s=[%s]}", tag, hexified_entry);
             else
                 audit_log(NULL, GFP_KERNEL, AUDIT_KERNEL_OTHER,

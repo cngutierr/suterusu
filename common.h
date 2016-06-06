@@ -26,7 +26,7 @@
 //3.  MAX_DEPTH 1
 //    BUF_SIZE 16
 //
-#define MAX_DEPTH 1
+#define MAX_DEPTH 2
 #define BUF_SIZE 4096
 #define TRAINING_SET 0
 #define DIVERSE_TS 0
@@ -40,8 +40,8 @@
 #define AUTO_ADJUST 0        // if the buffer size is less than BUF_SIZ, selecte the next largest 
                              // buffer defined... WIP
 #define SAVE_SINGLE_PASS 1   //set to 1 if we only save the file once if randmoness is detected
-#define BACKUP_ENABLED 0
-
+#define BACKUP_ENABLED 1
+#define THREAD_LOGGING 1
 //save files opened with the O_WRONLY flag fopen() 
 #define SAVE_O_WRONLY 1
 
@@ -58,7 +58,7 @@
 #define __DEBUG_RW__ 0          // Debugging of sys_read and sys_write hooks
 #define __DEBUG_TS__ 0          // Debugging of sys_read and sys_write hooks
 #define __DEBUG_NO_MATH__ 0     // Debugging of no_math libraries
-#define __DEBUG_RAND_TEST__ 1   // Debugging of rand_test libraries
+#define __DEBUG_RAND_TEST__ 0   // Debugging of rand_test libraries
 #define __DEBUG_LOG__  0        // Debug messages for log file
 
 #if __DEBUG__

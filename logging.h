@@ -22,7 +22,7 @@ extern bool decms_log_running;
 void enable_logging(void);
 void disable_logging(void);
 int logger_thread(void *data);
-
+int auditd_thread_logging(void *data);
 /* helper method to write to log file (choose between hex and non-hex)*/
 ssize_t _write_log(const char* entry, size_t entry_size, bool as_hex, const char *tag);
 ssize_t write_log(const char* entry, size_t entry_size);
